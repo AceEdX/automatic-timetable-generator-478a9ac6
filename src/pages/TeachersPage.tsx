@@ -14,7 +14,7 @@ import { DAYS, AVAILABLE_SUBJECTS } from '@/data/mockData';
 import { toast } from 'sonner';
 
 const TeachersPage = () => {
-  const { teachers, setTeachers, classes, subjects, setSubjects, getTeacherWeeklyPeriods, school, syncTeacherToSubjects } = useSchoolData();
+  const { teachers, setTeachers, classes, subjects, setSubjects, getTeacherWeeklyPeriods, school, setSchool, syncTeacherToSubjects } = useSchoolData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
 
@@ -86,8 +86,7 @@ const TeachersPage = () => {
     const trimmed = customSubject.trim();
     if (!trimmed) return;
     if (allSubjects.includes(trimmed)) { toast.error('Subject already exists'); return; }
-    // Add to school custom subjects
-    // We can't call setSchool directly here, so we'll add it to the mapping
+    setSchool(prev => ({ ...prev, customSubjects: [...prev.customSubjects, trimmed] }));
     setSubjectClassMap(prev => [...prev, { subject: trimmed, classIds: [] }]);
     setCustomSubject('');
     toast.success(`Added "${trimmed}" as a subject option`);
@@ -187,7 +186,12 @@ const TeachersPage = () => {
                         {teacher.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">{teacher.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-foreground">{teacher.name}</p>
+                          <Badge variant="secondary" className="text-[10px] h-5">
+                            {[...new Set((teacher.subjectClassMap || []).flatMap(m => m.classIds))].length} classes
+                          </Badge>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {teacher.teacherRole === 'ClassTeacher' ? 'Class Teacher' : 'Subject Teacher'}
                           {classTeacherOf && <span className="text-primary"> • CT of {classTeacherOf.grade}-{classTeacherOf.section}</span>}
