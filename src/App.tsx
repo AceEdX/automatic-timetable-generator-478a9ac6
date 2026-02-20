@@ -15,6 +15,7 @@ import SchoolSettingsPage from "./pages/SchoolSettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+// Force rebuild - context provider wraps AppContent
 
 const AppContent = () => (
   <AppLayout>
