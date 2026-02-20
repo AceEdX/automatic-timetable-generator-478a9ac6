@@ -6,20 +6,22 @@ import {
   CalendarDays,
   Users,
   UserCheck,
-  Settings,
   GraduationCap,
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  Settings,
 } from 'lucide-react';
+import { useSchoolData } from '@/context/SchoolDataContext';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/school-settings', icon: Settings, label: 'School Settings' },
   { path: '/time-slots', icon: Clock, label: 'Time Slots' },
-  { path: '/timetable', icon: CalendarDays, label: 'Timetable' },
   { path: '/teachers', icon: Users, label: 'Teachers' },
-  { path: '/substitution', icon: UserCheck, label: 'Substitution' },
   { path: '/classes', icon: BookOpen, label: 'Classes' },
+  { path: '/timetable', icon: CalendarDays, label: 'Timetable' },
+  { path: '/substitution', icon: UserCheck, label: 'Substitution' },
 ];
 
 interface AppLayoutProps {
@@ -29,16 +31,15 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { school } = useSchoolData();
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
       <aside
         className={`${
           collapsed ? 'w-16' : 'w-60'
         } flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out relative`}
       >
-        {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary shrink-0">
             <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
@@ -51,7 +52,6 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           )}
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 py-4 px-2 space-y-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -72,17 +72,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           })}
         </nav>
 
-        {/* School info */}
         {!collapsed && (
           <div className="p-4 border-t border-sidebar-border animate-fade-in">
             <div className="text-[11px] text-sidebar-foreground/50">
-              <p className="font-medium text-sidebar-foreground/70">Delhi Public School</p>
-              <p>CBSE • 2025-26</p>
+              <p className="font-medium text-sidebar-foreground/70">{school.schoolName}</p>
+              <p>{school.boardType} • {school.academicYear}</p>
             </div>
           </div>
         )}
 
-        {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="absolute -right-3 top-8 h-6 w-6 rounded-full bg-card border border-border flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
@@ -95,7 +93,6 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </button>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto bg-background">
         <div className="p-6">{children}</div>
       </main>

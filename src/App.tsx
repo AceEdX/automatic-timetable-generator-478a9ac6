@@ -11,6 +11,7 @@ import TimetableView from "./pages/TimetableView";
 import TeachersPage from "./pages/TeachersPage";
 import SubstitutionPanel from "./pages/SubstitutionPanel";
 import ClassesPage from "./pages/ClassesPage";
+import SchoolSettingsPage from "./pages/SchoolSettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <AppLayout>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/school-settings" element={<SchoolSettingsPage />} />
               <Route path="/time-slots" element={<TimeSlotConfig />} />
               <Route path="/timetable" element={<TimetableView />} />
               <Route path="/teachers" element={<TeachersPage />} />

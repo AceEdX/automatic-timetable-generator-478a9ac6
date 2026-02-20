@@ -1,26 +1,20 @@
-import { CalendarDays, Users, BookOpen, Clock, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
+import { CalendarDays, Users, BookOpen, Clock, AlertTriangle, CheckCircle, TrendingUp, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useSchoolData } from '@/context/SchoolDataContext';
 import { Link } from 'react-router-dom';
 
-const recentActivity = [
-  { text: 'Timetable v1 generated for Class X-A', time: '10:30 AM', type: 'success' as const },
-  { text: 'Ms. Gupta marked absent', time: '08:15 AM', type: 'warning' as const },
-  { text: 'Substitution assigned: Mrs. Reddy → Period 3', time: '08:20 AM', type: 'info' as const },
-  { text: 'Time slots updated for Saturday', time: 'Yesterday', type: 'neutral' as const },
-];
-
 const Dashboard = () => {
-  const { teachers, classes, timetableVersion, weekdaySlots, saturdaySlots } = useSchoolData();
+  const { school, teachers, classes, subjects, timetableVersion, weekdaySlots, saturdaySlots } = useSchoolData();
   const absentTeachers = teachers.filter(t => t.isAbsent);
   const weekdayPeriods = weekdaySlots.filter(s => !s.isBreak).length;
   const satPeriods = saturdaySlots.filter(s => !s.isBreak).length;
+  const assignedSubjects = subjects.filter(s => s.qualifiedTeacherIds.length > 0).length;
 
   const stats = [
-    { label: 'Classes', value: String(classes.length), icon: BookOpen, change: classes.map(c => `${c.grade}-${c.section}`).join(', ') },
+    { label: 'Classes', value: String(classes.length), icon: BookOpen, change: `Grades 1-10` },
     { label: 'Teachers', value: String(teachers.length), icon: Users, change: `${absentTeachers.length} absent today` },
-    { label: 'Active Timetable', value: timetableVersion.versionId.slice(0, 6), icon: CalendarDays, change: `Score: ${timetableVersion.score}%` },
+    { label: 'Timetable', value: timetableVersion.entries.length > 0 ? `${timetableVersion.score}%` : '—', icon: CalendarDays, change: timetableVersion.entries.length > 0 ? timetableVersion.status : 'Not generated' },
     { label: 'Time Slots', value: `${weekdayPeriods}+${satPeriods}`, icon: Clock, change: 'Weekday + Saturday' },
   ];
 
@@ -29,12 +23,14 @@ const Dashboard = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Delhi Public School • CBSE • Academic Year 2025-26</p>
+          <p className="text-sm text-muted-foreground mt-1">{school.schoolName} • {school.boardType} • {school.academicYear}</p>
         </div>
-        <div className="score-badge text-sm px-4 py-1.5">
-          <TrendingUp className="h-4 w-4 mr-1.5" />
-          Timetable Score: {timetableVersion.score}%
-        </div>
+        {timetableVersion.score > 0 && (
+          <div className="score-badge text-sm px-4 py-1.5">
+            <TrendingUp className="h-4 w-4 mr-1.5" />
+            Score: {timetableVersion.score}%
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -85,22 +81,27 @@ const Dashboard = () => {
 
         <Card className="glass-card lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
+            <CardTitle className="text-sm font-semibold">Setup Status</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentActivity.map((activity, i) => (
-                <div key={i} className="flex items-start gap-3 animate-slide-in" style={{ animationDelay: `${i * 80}ms` }}>
-                  <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${
-                    activity.type === 'success' ? 'bg-success' :
-                    activity.type === 'warning' ? 'bg-warning' :
-                    activity.type === 'info' ? 'bg-info' : 'bg-muted-foreground/30'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground">{activity.text}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{activity.time}</p>
+              {[
+                { label: 'Time Slots Configured', done: weekdayPeriods > 0, detail: `${weekdayPeriods} weekday, ${satPeriods} Saturday`, href: '/time-slots' },
+                { label: 'Teachers Added', done: teachers.length > 0, detail: `${teachers.length} teachers`, href: '/teachers' },
+                { label: 'Subjects Assigned to Teachers', done: assignedSubjects > 0, detail: `${assignedSubjects}/${subjects.length} subjects have teachers`, href: '/classes' },
+                { label: 'Timetable Generated', done: timetableVersion.entries.length > 0, detail: timetableVersion.entries.length > 0 ? `Score: ${timetableVersion.score}%` : 'Not yet', href: '/timetable' },
+              ].map((item, i) => (
+                <Link key={i} to={item.href} className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all">
+                  {item.done ? (
+                    <CheckCircle className="h-4 w-4 text-success shrink-0" />
+                  ) : (
+                    <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.detail}</p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>
@@ -112,12 +113,13 @@ const Dashboard = () => {
           <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { label: 'Generate Timetable', icon: CalendarDays, href: '/timetable' },
+              { label: 'School Settings', icon: Settings, href: '/school-settings' },
               { label: 'Configure Slots', icon: Clock, href: '/time-slots' },
-              { label: 'Handle Substitution', icon: Users, href: '/substitution' },
-              { label: 'View Teachers', icon: BookOpen, href: '/teachers' },
+              { label: 'Manage Teachers', icon: Users, href: '/teachers' },
+              { label: 'Classes & Subjects', icon: BookOpen, href: '/classes' },
+              { label: 'Generate Timetable', icon: CalendarDays, href: '/timetable' },
             ].map((action) => (
               <Link
                 key={action.label}
