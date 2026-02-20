@@ -58,6 +58,7 @@ export interface Subject {
   allowDoublePeriod: boolean;
   priority: SubjectPriority;
   qualifiedTeacherIds: string[];
+  needsPlayground?: boolean;
 }
 
 export interface TimetableEntry {
