@@ -8,12 +8,12 @@ export const DEFAULT_SECTIONS = ['A', 'B'];
 
 export const AVAILABLE_SUBJECTS = [
   'English', 'Mathematics', 'Hindi', 'Marathi', 'Science', 'Social Science',
-  'Computer Science', 'Physical Education', 'Art', 'EVS', 'Sanskrit',
+  'Computer Science', 'Physical Education', 'Art', 'Environmental Science', 'Sanskrit',
   'Music', 'Geography', 'History', 'Physics', 'Chemistry', 'Biology',
-  'Moral Science', 'General Knowledge', 'Environmental Science',
+  'Moral Science', 'General Knowledge',
 ];
 
-export const DEFAULT_SUBJECTS_PRIMARY = ['English', 'Mathematics', 'Hindi', 'Marathi', 'EVS', 'Art', 'Physical Education'];
+export const DEFAULT_SUBJECTS_PRIMARY = ['English', 'Mathematics', 'Hindi', 'Marathi', 'Environmental Science', 'Art', 'Physical Education'];
 export const DEFAULT_SUBJECTS_MIDDLE = ['English', 'Mathematics', 'Hindi', 'Marathi', 'Science', 'Social Science', 'Computer Science', 'Art', 'Physical Education'];
 export const DEFAULT_SUBJECTS_SECONDARY = ['English', 'Mathematics', 'Hindi', 'Marathi', 'Science', 'Social Science', 'Computer Science', 'Physical Education', 'Sanskrit'];
 
@@ -81,7 +81,7 @@ export const generateSubjectsForClasses = (classes: ClassInfo[]): Subject[] => {
       subjectId: `s_${cls.classId}_${name.toLowerCase().replace(/\s+/g, '_')}`,
       classId: cls.classId,
       subjectName: name,
-      periodsPerWeek: ['Mathematics', 'English', 'Science', 'Hindi'].includes(name) ? 6 : ['Social Science', 'Sanskrit', 'EVS', 'Marathi'].includes(name) ? 5 : 3,
+      periodsPerWeek: ['Mathematics', 'English', 'Science', 'Hindi'].includes(name) ? 6 : ['Social Science', 'Sanskrit', 'Environmental Science', 'Marathi'].includes(name) ? 5 : 3,
       maxPerDay: ['Mathematics', 'English', 'Science'].includes(name) ? 2 : 1,
       isLab: name === 'Computer Science',
       allowDoublePeriod: name === 'Computer Science' || name === 'Science',
@@ -104,7 +104,7 @@ const subjectColors: Record<string, string> = {
   'Physical Education': 'bg-destructive/10 text-destructive border-destructive/20',
   'Computer Science': 'bg-muted-foreground/10 text-muted-foreground border-muted-foreground/20',
   'Art': 'bg-accent/10 text-accent border-accent/20',
-  'EVS': 'bg-success/10 text-success border-success/20',
+  'Environmental Science': 'bg-success/10 text-success border-success/20',
   'Sanskrit': 'bg-primary/10 text-primary border-primary/20',
   'Music': 'bg-accent/10 text-accent border-accent/20',
 };
