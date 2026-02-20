@@ -16,27 +16,31 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AppContent = () => (
+  <AppLayout>
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/school-settings" element={<SchoolSettingsPage />} />
+      <Route path="/time-slots" element={<TimeSlotConfig />} />
+      <Route path="/timetable" element={<TimetableView />} />
+      <Route path="/teachers" element={<TeachersPage />} />
+      <Route path="/substitution" element={<SubstitutionPanel />} />
+      <Route path="/classes" element={<ClassesPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </AppLayout>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <SchoolDataProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppLayout>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/school-settings" element={<SchoolSettingsPage />} />
-              <Route path="/time-slots" element={<TimeSlotConfig />} />
-              <Route path="/timetable" element={<TimetableView />} />
-              <Route path="/teachers" element={<TeachersPage />} />
-              <Route path="/substitution" element={<SubstitutionPanel />} />
-              <Route path="/classes" element={<ClassesPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppLayout>
-        </BrowserRouter>
-      </SchoolDataProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <SchoolDataProvider>
+          <AppContent />
+        </SchoolDataProvider>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
