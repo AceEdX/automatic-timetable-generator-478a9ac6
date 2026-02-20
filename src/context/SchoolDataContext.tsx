@@ -175,70 +175,84 @@ function generateWholeSchoolTimetable(
       }
     }
 
-    // Fill remaining periods
-    for (const { day, periods } of allDays) {
-      for (const period of periods) {
-        if (entries.some(e => e.classId === cls.classId && e.day === day && e.period === period)) continue;
+    // Fill remaining periods - primary pass (respect periodsPerWeek)
+    const fillPeriods = (allowOverfill: boolean) => {
+      for (const { day, periods } of allDays) {
+        for (const period of periods) {
+          if (entries.some(e => e.classId === cls.classId && e.day === day && e.period === period)) continue;
 
-        const shuffled = [...subjectSlots].sort((a, b) => {
-          if (a.subject.priority !== b.subject.priority) return priorityOrder[a.subject.priority] - priorityOrder[b.subject.priority];
-          return (b.subject.periodsPerWeek - b.assigned) - (a.subject.periodsPerWeek - a.assigned);
-        });
-
-        let assigned = false;
-        for (const sSlot of shuffled) {
-          if (sSlot.assigned >= sSlot.subject.periodsPerWeek) continue;
-          const dailyKey = `${sSlot.subject.subjectId}_${day}`;
-          if ((subjectDailyCount[dailyKey] || 0) >= sSlot.subject.maxPerDay) continue;
-
-          const prevEntry = entries.find(e => e.classId === cls.classId && e.day === day && e.period === period - 1);
-          if (prevEntry && prevEntry.subjectId === sSlot.subject.subjectId && !sSlot.subject.allowDoublePeriod) continue;
-
-          if (sSlot.subject.isLab && !isLabFree(day, period)) continue;
-          if (sSlot.subject.needsPlayground && !isPlaygroundFree(day, period)) continue;
-
-          const qualifiedTeachers = sSlot.subject.qualifiedTeacherIds
-            .map(tid => teachers.find(t => t.teacherId === tid))
-            .filter((t): t is Teacher => !!t && canAssignTeacher(t, day, period));
-
-          if (qualifiedTeachers.length === 0) continue;
-
-          const teacher = qualifiedTeachers.sort((a, b) =>
-            (teacherWeeklyLoad[a.teacherId] || 0) - (teacherWeeklyLoad[b.teacherId] || 0)
-          )[0];
-
-          const slot = (day === 'Saturday' ? saturdaySlots : weekdaySlots).find(s => s.periodNumber === period);
-          let room = `Room ${cls.grade}-${cls.section}`;
-          if (sSlot.subject.isLab) {
-            room = 'Computer Lab';
-            if (!labSchedule[day]) labSchedule[day] = new Set();
-            labSchedule[day].add(period);
-          }
-          if (sSlot.subject.needsPlayground) {
-            room = 'Playground';
-            if (!playgroundSchedule[day]) playgroundSchedule[day] = new Set();
-            playgroundSchedule[day].add(period);
-          }
-
-          entries.push({
-            timetableId: `tt_${cls.classId}_${day}_${period}`,
-            schoolId: cls.schoolId, classId: cls.classId, day, period,
-            timeSlot: `${slot?.startTime || ''} - ${slot?.endTime || ''}`,
-            subjectId: sSlot.subject.subjectId, teacherId: teacher.teacherId,
-            room, status: 'draft', generatedAt: now,
+          const shuffled = [...subjectSlots].sort((a, b) => {
+            if (!allowOverfill) {
+              const aRemaining = a.subject.periodsPerWeek - a.assigned;
+              const bRemaining = b.subject.periodsPerWeek - b.assigned;
+              if (aRemaining > 0 && bRemaining <= 0) return -1;
+              if (bRemaining > 0 && aRemaining <= 0) return 1;
+            }
+            if (a.subject.priority !== b.subject.priority) return priorityOrder[a.subject.priority] - priorityOrder[b.subject.priority];
+            return (b.subject.periodsPerWeek - b.assigned) - (a.subject.periodsPerWeek - a.assigned);
           });
-          assignTeacher(teacher.teacherId, day, period);
-          sSlot.assigned++;
-          subjectDailyCount[dailyKey] = (subjectDailyCount[dailyKey] || 0) + 1;
-          assigned = true;
-          break;
-        }
 
-        if (!assigned) {
-          errors.push(`Could not fill P${period} on ${day} for ${cls.grade}-${cls.section}: No available teacher/subject`);
+          let assigned = false;
+          for (const sSlot of shuffled) {
+            if (!allowOverfill && sSlot.assigned >= sSlot.subject.periodsPerWeek) continue;
+            const dailyKey = `${sSlot.subject.subjectId}_${day}`;
+            const dailyMax = allowOverfill ? sSlot.subject.maxPerDay + 1 : sSlot.subject.maxPerDay;
+            if ((subjectDailyCount[dailyKey] || 0) >= dailyMax) continue;
+
+            const prevEntry = entries.find(e => e.classId === cls.classId && e.day === day && e.period === period - 1);
+            if (prevEntry && prevEntry.subjectId === sSlot.subject.subjectId && !sSlot.subject.allowDoublePeriod) continue;
+
+            if (sSlot.subject.isLab && !isLabFree(day, period)) continue;
+            if (sSlot.subject.needsPlayground && !isPlaygroundFree(day, period)) continue;
+
+            const qualifiedTeachers = sSlot.subject.qualifiedTeacherIds
+              .map(tid => teachers.find(t => t.teacherId === tid))
+              .filter((t): t is Teacher => !!t && canAssignTeacher(t, day, period));
+
+            if (qualifiedTeachers.length === 0) continue;
+
+            const teacher = qualifiedTeachers.sort((a, b) =>
+              (teacherWeeklyLoad[a.teacherId] || 0) - (teacherWeeklyLoad[b.teacherId] || 0)
+            )[0];
+
+            const slot = (day === 'Saturday' ? saturdaySlots : weekdaySlots).find(s => s.periodNumber === period);
+            let room = `Room ${cls.grade}-${cls.section}`;
+            if (sSlot.subject.isLab) {
+              room = 'Computer Lab';
+              if (!labSchedule[day]) labSchedule[day] = new Set();
+              labSchedule[day].add(period);
+            }
+            if (sSlot.subject.needsPlayground) {
+              room = 'Playground';
+              if (!playgroundSchedule[day]) playgroundSchedule[day] = new Set();
+              playgroundSchedule[day].add(period);
+            }
+
+            entries.push({
+              timetableId: `tt_${cls.classId}_${day}_${period}`,
+              schoolId: cls.schoolId, classId: cls.classId, day, period,
+              timeSlot: `${slot?.startTime || ''} - ${slot?.endTime || ''}`,
+              subjectId: sSlot.subject.subjectId, teacherId: teacher.teacherId,
+              room, status: 'draft', generatedAt: now,
+            });
+            assignTeacher(teacher.teacherId, day, period);
+            sSlot.assigned++;
+            subjectDailyCount[dailyKey] = (subjectDailyCount[dailyKey] || 0) + 1;
+            assigned = true;
+            break;
+          }
+
+          if (!assigned && allowOverfill) {
+            errors.push(`Could not fill P${period} on ${day} for ${cls.grade}-${cls.section}: No available teacher/subject`);
+          }
         }
       }
-    }
+    };
+
+    // First pass: respect periodsPerWeek limits
+    fillPeriods(false);
+    // Second pass: overfill remaining empty slots to eliminate free periods
+    fillPeriods(true);
 
     for (const sSlot of subjectSlots) {
       if (sSlot.assigned < sSlot.subject.periodsPerWeek) {

@@ -25,6 +25,7 @@ const TimetableView = () => {
   const version = timetableVersion;
 
   const getSlotsForDay = (day: Day) => (day === 'Saturday' ? saturdaySlots : weekdaySlots).filter(s => !s.isBreak);
+  const getAllSlotsForDay = (day: Day) => (day === 'Saturday' ? saturdaySlots : weekdaySlots);
   const getSubjectName = (subjectId: string) => subjects.find(s => s.subjectId === subjectId)?.subjectName || '';
   const getTeacherName = (teacherId: string) => teachers.find(t => t.teacherId === teacherId)?.name || '';
   const getClassName = (classId: string) => {
@@ -136,7 +137,7 @@ const TimetableView = () => {
     printWindow.print();
   };
 
-  const maxPeriods = getSlotsForDay('Monday').length;
+  const mondayAllSlots = getAllSlotsForDay('Monday');
 
   const renderClassTable = (classId: string) => {
     const classEntries = version.entries.filter(e => e.classId === classId);
@@ -145,9 +146,9 @@ const TimetableView = () => {
         <thead>
           <tr className="bg-primary/5">
             <th className="text-left p-2.5 text-xs font-semibold text-muted-foreground border-b border-border w-20">Day</th>
-            {getSlotsForDay('Monday').map(slot => (
-              <th key={slot.periodNumber} className="text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border">
-                <div>P{slot.periodNumber}</div>
+            {mondayAllSlots.map(slot => (
+              <th key={slot.isBreak ? `break-${slot.startTime}` : slot.periodNumber} className={`text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border ${slot.isBreak ? 'bg-muted/40' : ''}`}>
+                <div>{slot.isBreak ? slot.label || 'Break' : `P${slot.periodNumber}`}</div>
                 <div className="text-[10px] font-normal">{slot.startTime}–{slot.endTime}</div>
               </th>
             ))}
@@ -155,13 +156,21 @@ const TimetableView = () => {
         </thead>
         <tbody>
           {DAYS.map(day => {
-            const daySlots = getSlotsForDay(day);
+            const allSlots = getAllSlotsForDay(day);
             return (
               <tr key={day} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="p-2.5 text-xs font-medium text-foreground">{day.slice(0, 3)}</td>
-                {Array.from({ length: maxPeriods }, (_, i) => i + 1).map(period => {
-                  const slot = daySlots.find(s => s.periodNumber === period);
-                  if (!slot && day === 'Saturday') {
+                {mondayAllSlots.map((mondaySlot, idx) => {
+                  if (mondaySlot.isBreak) {
+                    const dayHasSlot = allSlots.find(s => s.isBreak && s.startTime === mondaySlot.startTime);
+                    if (dayHasSlot) {
+                      return <td key={`break-${idx}`} className="p-1 text-center bg-muted/20"><div className="rounded p-1.5 text-[10px] font-medium text-muted-foreground">☕ {dayHasSlot.label || 'Break'}</div></td>;
+                    }
+                    return <td key={`break-${idx}`} className="p-1 text-center bg-muted/20"><div className="rounded p-1.5 text-[10px] text-muted-foreground">—</div></td>;
+                  }
+                  const period = mondaySlot.periodNumber;
+                  const daySlot = allSlots.find(s => !s.isBreak && s.periodNumber === period);
+                  if (!daySlot && day === 'Saturday') {
                     return <td key={period} className="p-1 text-center"><div className="rounded p-1.5 bg-muted/30 text-[10px] text-muted-foreground">—</div></td>;
                   }
                   const entry = classEntries.find(e => e.day === day && e.period === period);
@@ -191,16 +200,15 @@ const TimetableView = () => {
     if (!teacher) return null;
     const teacherEntries = getTeacherTimetable(teacherId);
 
-    // Find free periods for substitution info
     return (
       <div>
         <table className="w-full border-collapse min-w-[700px]">
           <thead>
             <tr className="bg-primary/5">
               <th className="text-left p-2.5 text-xs font-semibold text-muted-foreground border-b border-border w-20">Day</th>
-              {getSlotsForDay('Monday').map(slot => (
-                <th key={slot.periodNumber} className="text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border">
-                  <div>P{slot.periodNumber}</div>
+              {mondayAllSlots.map(slot => (
+                <th key={slot.isBreak ? `break-${slot.startTime}` : slot.periodNumber} className={`text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border ${slot.isBreak ? 'bg-muted/40' : ''}`}>
+                  <div>{slot.isBreak ? slot.label || 'Break' : `P${slot.periodNumber}`}</div>
                   <div className="text-[10px] font-normal">{slot.startTime}–{slot.endTime}</div>
                 </th>
               ))}
@@ -208,13 +216,21 @@ const TimetableView = () => {
           </thead>
           <tbody>
             {DAYS.map(day => {
-              const daySlots = getSlotsForDay(day);
+              const allSlots = getAllSlotsForDay(day);
               return (
                 <tr key={day} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="p-2.5 text-xs font-medium text-foreground">{day.slice(0, 3)}</td>
-                  {Array.from({ length: maxPeriods }, (_, i) => i + 1).map(period => {
-                    const slot = daySlots.find(s => s.periodNumber === period);
-                    if (!slot && day === 'Saturday') {
+                  {mondayAllSlots.map((mondaySlot, idx) => {
+                    if (mondaySlot.isBreak) {
+                      const dayHasSlot = allSlots.find(s => s.isBreak && s.startTime === mondaySlot.startTime);
+                      if (dayHasSlot) {
+                        return <td key={`break-${idx}`} className="p-1 text-center bg-muted/20"><div className="rounded p-1.5 text-[10px] font-medium text-muted-foreground">☕ {dayHasSlot.label || 'Break'}</div></td>;
+                      }
+                      return <td key={`break-${idx}`} className="p-1 text-center bg-muted/20"><div className="rounded p-1.5 text-[10px] text-muted-foreground">—</div></td>;
+                    }
+                    const period = mondaySlot.periodNumber;
+                    const daySlot = allSlots.find(s => !s.isBreak && s.periodNumber === period);
+                    if (!daySlot && day === 'Saturday') {
                       return <td key={period} className="p-1 text-center"><div className="rounded p-1.5 bg-muted/30 text-[10px] text-muted-foreground">—</div></td>;
                     }
                     const entry = teacherEntries.find(e => e.day === day && e.period === period);
