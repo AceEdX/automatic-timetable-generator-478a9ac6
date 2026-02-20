@@ -14,13 +14,14 @@ import { DAYS, AVAILABLE_SUBJECTS } from '@/data/mockData';
 import { toast } from 'sonner';
 
 const TeachersPage = () => {
-  const { teachers, setTeachers, classes, subjects, setSubjects, getTeacherWeeklyPeriods, school, setSchool, syncTeacherToSubjects } = useSchoolData();
+  const { teachers, setTeachers, classes, setClasses, subjects, setSubjects, getTeacherWeeklyPeriods, school, setSchool, syncTeacherToSubjects } = useSchoolData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
 
   // Form state
   const [name, setName] = useState('');
   const [role, setRole] = useState<TeacherRole>('SubjectTeacher');
+  const [ctClassId, setCtClassId] = useState('none');
   const [subjectClassMap, setSubjectClassMap] = useState<SubjectClassMapping[]>([]);
   const [maxPerDay, setMaxPerDay] = useState(6);
   const [maxPerWeek, setMaxPerWeek] = useState(30);
@@ -36,6 +37,7 @@ const TeachersPage = () => {
   const resetForm = () => {
     setName('');
     setRole('SubjectTeacher');
+    setCtClassId('none');
     setSubjectClassMap([]);
     setMaxPerDay(6);
     setMaxPerWeek(30);
@@ -50,6 +52,8 @@ const TeachersPage = () => {
     setEditingTeacher(t);
     setName(t.name);
     setRole(t.teacherRole);
+    const ctClass = classes.find(c => c.classTeacherId === t.teacherId);
+    setCtClassId(ctClass ? ctClass.classId : 'none');
     setSubjectClassMap(t.subjectClassMap || []);
     setMaxPerDay(t.maxPeriodsPerDay);
     setMaxPerWeek(t.maxPeriodsPerWeek);
@@ -101,6 +105,8 @@ const TeachersPage = () => {
     const derivedSubjects = subjectClassMap.map(m => m.subject);
     const derivedClasses = [...new Set(subjectClassMap.flatMap(m => m.classIds))];
 
+    const teacherId = editingTeacher ? editingTeacher.teacherId : `t_${Date.now()}`;
+
     if (editingTeacher) {
       const updated: Teacher = {
         ...editingTeacher,
@@ -118,7 +124,7 @@ const TeachersPage = () => {
       toast.success('Teacher updated');
     } else {
       const newTeacher: Teacher = {
-        teacherId: `t_${Date.now()}`,
+        teacherId,
         schoolId: 's1',
         name: name.trim(),
         teacherRole: role,
@@ -134,6 +140,27 @@ const TeachersPage = () => {
       syncTeacherToSubjects(newTeacher);
       toast.success('Teacher added');
     }
+
+    // Sync CT assignment to classes
+    if (role === 'ClassTeacher' && ctClassId !== 'none') {
+      setClasses(prev => prev.map(c => {
+        // Remove this teacher from any previous CT assignment
+        if (c.classTeacherId === teacherId && c.classId !== ctClassId) {
+          return { ...c, classTeacherId: '' };
+        }
+        // Assign to selected class
+        if (c.classId === ctClassId) {
+          return { ...c, classTeacherId: teacherId };
+        }
+        return c;
+      }));
+    } else if (role === 'SubjectTeacher') {
+      // Remove CT assignment if role changed
+      setClasses(prev => prev.map(c =>
+        c.classTeacherId === teacherId ? { ...c, classTeacherId: '' } : c
+      ));
+    }
+
     setDialogOpen(false);
     resetForm();
   };
@@ -244,7 +271,19 @@ const TeachersPage = () => {
                     </div>
                     <div className="flex justify-between items-center pt-1 border-t border-border">
                       <span className="text-muted-foreground font-medium">Assigned Periods/Week</span>
-                      <Badge variant="secondary" className="text-xs font-bold">{total}</Badge>
+                      <Badge variant="secondary" className="text-xs font-bold">
+                        {(() => {
+                          // Calculate from subject periodsPerWeek for classes this teacher is assigned to
+                          let totalPeriods = 0;
+                          (teacher.subjectClassMap || []).forEach(m => {
+                            m.classIds.forEach(cid => {
+                              const subj = subjects.find(s => s.classId === cid && s.subjectName.toLowerCase() === m.subject.toLowerCase());
+                              if (subj) totalPeriods += subj.periodsPerWeek;
+                            });
+                          });
+                          return totalPeriods;
+                        })()}
+                      </Badge>
                     </div>
                   </div>
 
@@ -294,6 +333,28 @@ const TeachersPage = () => {
                 </Select>
               </div>
             </div>
+
+            {/* CT Class Assignment */}
+            {role === 'ClassTeacher' && (
+              <div className="space-y-2">
+                <Label>Assign as Class Teacher of</Label>
+                <Select value={ctClassId} onValueChange={setCtClassId}>
+                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {enabledClasses.map(c => {
+                      const currentCT = teachers.find(t => t.teacherId === c.classTeacherId);
+                      const isOccupied = currentCT && currentCT.teacherId !== editingTeacher?.teacherId;
+                      return (
+                        <SelectItem key={c.classId} value={c.classId} disabled={!!isOccupied}>
+                          {c.grade}-{c.section}{isOccupied ? ` (CT: ${currentCT.name})` : ''}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

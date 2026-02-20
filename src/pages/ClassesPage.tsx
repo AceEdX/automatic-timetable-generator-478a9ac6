@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Pencil, Plus, Trash2, BookOpen, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Pencil, Plus, Trash2, BookOpen, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
 import { useSchoolData } from '@/context/SchoolDataContext';
 import { Subject, SubjectPriority } from '@/types/school';
 import { toast } from 'sonner';
 
 const ClassesPage = () => {
-  const { classes, setClasses, subjects, setSubjects, teachers, weekdaySlots, saturdaySlots, getPeriodsPerWeekForClass } = useSchoolData();
+  const { classes, setClasses, subjects, setSubjects, teachers, weekdaySlots, saturdaySlots, getPeriodsPerWeekForClass, getAllSubjectNames } = useSchoolData();
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
   const [ctDialogOpen, setCtDialogOpen] = useState(false);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
@@ -207,9 +208,38 @@ const ClassesPage = () => {
                             })}
                           </div>
                         )}
-                        <Button variant="outline" size="sm" className="text-xs mt-2 w-full" onClick={() => openAddSubject(cls.classId)}>
-                          <Plus className="h-3 w-3 mr-1" /> Add Subject
-                        </Button>
+                        <div className="flex gap-2 mt-2">
+                          <Button variant="outline" size="sm" className="text-xs flex-1" onClick={() => openAddSubject(cls.classId)}>
+                            <Plus className="h-3 w-3 mr-1" /> Add Subject
+                          </Button>
+                          {(() => {
+                            // Find previous class (same grade previous section, or previous grade last section)
+                            const sortedClasses = classes.filter(c => c.isEnabled).sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section));
+                            const idx = sortedClasses.findIndex(c => c.classId === cls.classId);
+                            const prevClass = idx > 0 ? sortedClasses[idx - 1] : null;
+                            if (!prevClass) return null;
+                            const prevSubjects = subjects.filter(s => s.classId === prevClass.classId);
+                            if (prevSubjects.length === 0) return null;
+                            return (
+                              <Button variant="outline" size="sm" className="text-xs" onClick={() => {
+                                const existing = subjects.filter(s => s.classId === cls.classId).map(s => s.subjectName.toLowerCase());
+                                const newSubs = prevSubjects
+                                  .filter(ps => !existing.includes(ps.subjectName.toLowerCase()))
+                                  .map(ps => ({
+                                    ...ps,
+                                    subjectId: `s_${cls.classId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                                    classId: cls.classId,
+                                    qualifiedTeacherIds: [],
+                                  }));
+                                if (newSubs.length === 0) { toast.info('All subjects already exist'); return; }
+                                setSubjects(prev => [...prev, ...newSubs]);
+                                toast.success(`Copied ${newSubs.length} subjects from ${prevClass.grade}-${prevClass.section}`);
+                              }}>
+                                <Copy className="h-3 w-3 mr-1" /> Copy from {prevClass.grade}-{prevClass.section}
+                              </Button>
+                            );
+                          })()}
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -279,9 +309,34 @@ const ClassesPage = () => {
             <DialogTitle>{editingSubject ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label>Subject Name</Label>
-              <Input value={subName} onChange={e => setSubName(e.target.value)} placeholder="e.g. Mathematics" />
+              <Input
+                value={subName}
+                onChange={e => { setSubName(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder="e.g. Mathematics"
+                autoComplete="off"
+              />
+              {showSuggestions && subName.trim().length > 0 && (() => {
+                const allNames = getAllSubjectNames();
+                const filtered = allNames.filter(n => n.toLowerCase().includes(subName.toLowerCase()) && n.toLowerCase() !== subName.toLowerCase());
+                if (filtered.length === 0) return null;
+                return (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-md max-h-40 overflow-y-auto">
+                    {filtered.map(name => (
+                      <button
+                        key={name}
+                        className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                        onMouseDown={(e) => { e.preventDefault(); setSubName(name); setShowSuggestions(false); }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
