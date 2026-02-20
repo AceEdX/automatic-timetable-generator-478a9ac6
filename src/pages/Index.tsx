@@ -1,14 +1,8 @@
 import { CalendarDays, Users, BookOpen, Clock, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { mockTeachers, mockClasses, mockTimetableVersion } from '@/data/mockData';
-
-const stats = [
-  { label: 'Classes', value: '3', icon: BookOpen, change: 'X-A, X-B, IX-A' },
-  { label: 'Teachers', value: '7', icon: Users, change: '1 absent today' },
-  { label: 'Active Timetable', value: 'v1', icon: CalendarDays, change: 'Score: 92%' },
-  { label: 'Time Slots', value: '8+5', icon: Clock, change: 'Weekday + Saturday' },
-];
+import { useSchoolData } from '@/context/SchoolDataContext';
+import { Link } from 'react-router-dom';
 
 const recentActivity = [
   { text: 'Timetable v1 generated for Class X-A', time: '10:30 AM', type: 'success' as const },
@@ -18,11 +12,20 @@ const recentActivity = [
 ];
 
 const Dashboard = () => {
-  const absentTeachers = mockTeachers.filter(t => t.isAbsent);
+  const { teachers, classes, timetableVersion, weekdaySlots, saturdaySlots } = useSchoolData();
+  const absentTeachers = teachers.filter(t => t.isAbsent);
+  const weekdayPeriods = weekdaySlots.filter(s => !s.isBreak).length;
+  const satPeriods = saturdaySlots.filter(s => !s.isBreak).length;
+
+  const stats = [
+    { label: 'Classes', value: String(classes.length), icon: BookOpen, change: classes.map(c => `${c.grade}-${c.section}`).join(', ') },
+    { label: 'Teachers', value: String(teachers.length), icon: Users, change: `${absentTeachers.length} absent today` },
+    { label: 'Active Timetable', value: timetableVersion.versionId.slice(0, 6), icon: CalendarDays, change: `Score: ${timetableVersion.score}%` },
+    { label: 'Time Slots', value: `${weekdayPeriods}+${satPeriods}`, icon: Clock, change: 'Weekday + Saturday' },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
@@ -30,11 +33,10 @@ const Dashboard = () => {
         </div>
         <div className="score-badge text-sm px-4 py-1.5">
           <TrendingUp className="h-4 w-4 mr-1.5" />
-          Timetable Score: {mockTimetableVersion.score}%
+          Timetable Score: {timetableVersion.score}%
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="glass-card hover:shadow-md transition-shadow">
@@ -55,7 +57,6 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Absent Teachers Alert */}
         <Card className="glass-card lg:col-span-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -66,8 +67,7 @@ const Dashboard = () => {
           <CardContent className="space-y-3">
             {absentTeachers.length === 0 ? (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-success" />
-                All teachers present
+                <CheckCircle className="h-4 w-4 text-success" /> All teachers present
               </p>
             ) : (
               absentTeachers.map((teacher) => (
@@ -83,7 +83,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
         <Card className="glass-card lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
@@ -108,7 +107,6 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Quick Actions */}
       <Card className="glass-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
@@ -121,14 +119,14 @@ const Dashboard = () => {
               { label: 'Handle Substitution', icon: Users, href: '/substitution' },
               { label: 'View Teachers', icon: BookOpen, href: '/teachers' },
             ].map((action) => (
-              <a
+              <Link
                 key={action.label}
-                href={action.href}
+                to={action.href}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/5 transition-all group"
               >
                 <action.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground text-center transition-colors">{action.label}</span>
-              </a>
+              </Link>
             ))}
           </div>
         </CardContent>

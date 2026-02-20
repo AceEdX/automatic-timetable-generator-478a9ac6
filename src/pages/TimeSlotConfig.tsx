@@ -7,12 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Plus, Trash2, Save, Coffee } from 'lucide-react';
 import { TimeSlot } from '@/types/school';
-import { mockWeekdaySlots, mockSaturdaySlots } from '@/data/mockData';
+import { useSchoolData } from '@/context/SchoolDataContext';
+import { toast } from 'sonner';
 
 const TimeSlotConfig = () => {
-  const [weekdaySlots, setWeekdaySlots] = useState<TimeSlot[]>(mockWeekdaySlots);
-  const [saturdaySlots, setSaturdaySlots] = useState<TimeSlot[]>(mockSaturdaySlots);
-  const [isSaturdayHalfDay, setIsSaturdayHalfDay] = useState(true);
+  const { weekdaySlots: savedWeekday, saturdaySlots: savedSaturday, isSaturdayHalfDay: savedHalfDay, setWeekdaySlots: saveWeekday, setSaturdaySlots: saveSaturday, setIsSaturdayHalfDay: saveHalfDay } = useSchoolData();
+
+  const [weekdaySlots, setWeekdaySlots] = useState<TimeSlot[]>(savedWeekday);
+  const [saturdaySlots, setSaturdaySlots] = useState<TimeSlot[]>(savedSaturday);
+  const [isSaturdayHalfDay, setIsSaturdayHalfDay] = useState(savedHalfDay);
+
+  const handleSave = () => {
+    saveWeekday(weekdaySlots);
+    saveSaturday(saturdaySlots);
+    saveHalfDay(isSaturdayHalfDay);
+    toast.success('Time slots saved! Changes will apply to future timetable generation.');
+  };
 
   const addSlot = (type: 'weekday' | 'saturday') => {
     const slots = type === 'weekday' ? weekdaySlots : saturdaySlots;
@@ -111,12 +121,11 @@ const TimeSlotConfig = () => {
           <h1 className="text-2xl font-bold text-foreground">Time Slot Configuration</h1>
           <p className="text-sm text-muted-foreground mt-1">Define school-wide period timings for weekdays and Saturday</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleSave}>
           <Save className="h-4 w-4" /> Save Template
         </Button>
       </div>
 
-      {/* Saturday toggle */}
       <Card className="glass-card">
         <CardContent className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -131,7 +140,6 @@ const TimeSlotConfig = () => {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Weekday */}
         <Card className="glass-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -142,7 +150,6 @@ const TimeSlotConfig = () => {
           <CardContent>{renderSlotEditor(weekdaySlots, 'weekday')}</CardContent>
         </Card>
 
-        {/* Saturday */}
         <Card className="glass-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
