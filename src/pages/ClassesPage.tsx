@@ -30,7 +30,7 @@ const ClassesPage = () => {
   const [priority, setPriority] = useState<SubjectPriority>('Core');
 
   // CT form
-  const [selectedCT, setSelectedCT] = useState('');
+  const [selectedCT, setSelectedCT] = useState('none');
 
   const weekdayPeriods = weekdaySlots.filter(s => !s.isBreak).length;
   const satPeriods = saturdaySlots.filter(s => !s.isBreak).length;
@@ -95,14 +95,15 @@ const ClassesPage = () => {
   const openCTDialog = (classId: string) => {
     setActiveClassId(classId);
     const cls = classes.find(c => c.classId === classId);
-    setSelectedCT(cls?.classTeacherId || '');
+    setSelectedCT(cls?.classTeacherId || 'none');
     setCtDialogOpen(true);
   };
 
   const handleSaveCT = () => {
     if (!activeClassId) return;
+    const teacherId = selectedCT === 'none' ? '' : selectedCT;
     setClasses(prev => prev.map(c =>
-      c.classId === activeClassId ? { ...c, classTeacherId: selectedCT } : c
+      c.classId === activeClassId ? { ...c, classTeacherId: teacherId } : c
     ));
     toast.success('Class teacher assigned');
     setCtDialogOpen(false);
@@ -331,7 +332,7 @@ const ClassesPage = () => {
             <Select value={selectedCT} onValueChange={setSelectedCT}>
               <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {teachers.map(t => (
                   <SelectItem key={t.teacherId} value={t.teacherId}>{t.name}</SelectItem>
                 ))}
