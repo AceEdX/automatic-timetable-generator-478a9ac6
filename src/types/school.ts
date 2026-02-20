@@ -25,6 +25,8 @@ export interface School {
   schoolName: string;
   boardType: BoardType;
   academicYear: string;
+  divisionsPerGrade: Record<string, string[]>; // grade -> ['A', 'B', 'C', ...]
+  customSubjects: string[]; // admin-added subjects
 }
 
 export interface ClassInfo {
@@ -33,6 +35,12 @@ export interface ClassInfo {
   grade: string;
   section: string;
   classTeacherId: string;
+  isEnabled: boolean; // only enabled classes are considered for timetable
+}
+
+export interface SubjectClassMapping {
+  subject: string;
+  classIds: string[];
 }
 
 export interface Teacher {
@@ -42,6 +50,7 @@ export interface Teacher {
   teacherRole: TeacherRole;
   subjectsCanTeach: string[];
   classesHandled: string[];
+  subjectClassMap: SubjectClassMapping[]; // which subject for which classes
   maxPeriodsPerDay: number;
   maxPeriodsPerWeek: number;
   availableDays: Day[];

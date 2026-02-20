@@ -21,13 +21,10 @@ const TimetableView = () => {
   const [generationErrors, setGenerationErrors] = useState<string[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
+  const enabledClasses = classes.filter(c => c.isEnabled);
   const version = timetableVersion;
 
-  const getSlotsForDay = (day: Day) => {
-    const slots = day === 'Saturday' ? saturdaySlots : weekdaySlots;
-    return slots.filter(s => !s.isBreak);
-  };
-
+  const getSlotsForDay = (day: Day) => (day === 'Saturday' ? saturdaySlots : weekdaySlots).filter(s => !s.isBreak);
   const getSubjectName = (subjectId: string) => subjects.find(s => s.subjectId === subjectId)?.subjectName || '';
   const getTeacherName = (teacherId: string) => teachers.find(t => t.teacherId === teacherId)?.name || '';
   const getClassName = (classId: string) => {
@@ -35,32 +32,26 @@ const TimetableView = () => {
     return c ? `${c.grade}-${c.section}` : '';
   };
 
-  const handleGenerate = () => {
-    const validationErrors = validateData();
+  const handleGenerate = (gradeRange?: [number, number]) => {
+    const validationErrors = validateData(gradeRange);
     if (validationErrors.length > 0) {
       setGenerationErrors(validationErrors);
-      toast.error(`${validationErrors.length} validation issue(s) found. Fix them before generating.`);
+      toast.error(`${validationErrors.length} validation issue(s). Fix them before generating.`);
       return;
     }
-    const { version: v, errors } = regenerateTimetable();
+    const { errors } = regenerateTimetable(gradeRange);
     setGenerationErrors(errors);
+    const label = gradeRange ? `Grades ${gradeRange[0]}-${gradeRange[1]}` : 'All';
     if (errors.length === 0) {
-      toast.success(`Timetable generated! Score: ${v.score}%`, {
-        description: `Version ${v.versionId.slice(0, 10)} • ${new Date(v.generatedAt).toLocaleString()}`,
-      });
+      toast.success(`${label} timetable generated successfully!`);
     } else {
-      toast.warning(`Timetable generated with ${errors.length} warning(s). Score: ${v.score}%`);
+      toast.warning(`${label} timetable generated with ${errors.length} warning(s)`);
     }
   };
 
   const handleLock = () => {
-    if (version.status === 'locked') {
-      unlockTimetable();
-      toast.info('Timetable unlocked');
-    } else {
-      lockTimetable();
-      toast.success('Timetable locked & published');
-    }
+    if (version.status === 'locked') { unlockTimetable(); toast.info('Timetable unlocked'); }
+    else { lockTimetable(); toast.success('Timetable locked & published'); }
   };
 
   const generateCSV = (rows: string[][], filename: string) => {
@@ -68,9 +59,7 @@ const TimetableView = () => {
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -78,8 +67,8 @@ const TimetableView = () => {
     const cls = classes.find(c => c.classId === selectedClass);
     if (!cls) return;
     const rows = [
-      [`${school.schoolName} - Class ${cls.grade}-${cls.section} Timetable`, '', '', '', '', ''],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`, '', '', ''],
+      [`${school.schoolName} - Class ${cls.grade}-${cls.section} Timetable`],
+      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
       ['Day', 'Period', 'Time', 'Subject', 'Teacher', 'Room'],
     ];
     version.entries.filter(e => e.classId === selectedClass).sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.period - b.period)
@@ -93,8 +82,8 @@ const TimetableView = () => {
     if (!teacher) return;
     const entries = getTeacherTimetable(selectedTeacher);
     const rows = [
-      [`${school.schoolName} - ${teacher.name} Teaching Schedule`, '', '', '', ''],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`, '', ''],
+      [`${school.schoolName} - ${teacher.name} Teaching Schedule`],
+      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
       ['Day', 'Period', 'Time', 'Subject', 'Class', 'Room'],
     ];
     entries.sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.period - b.period)
@@ -105,8 +94,8 @@ const TimetableView = () => {
 
   const handleExportWholeSchool = () => {
     const rows = [
-      [`${school.schoolName} - Whole School Timetable`, '', '', '', '', '', ''],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`, '', '', '', ''],
+      [`${school.schoolName} - Whole School Timetable`],
+      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
       ['Class', 'Day', 'Period', 'Time', 'Subject', 'Teacher', 'Room'],
     ];
     version.entries.sort((a, b) => {
@@ -132,7 +121,7 @@ const TimetableView = () => {
       <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
         table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-size: 11px; text-align: center; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 11px; text-align: center; }
         th { background: #f0f4f8; font-weight: bold; }
         h1 { font-size: 18px; margin-bottom: 4px; }
         .meta { font-size: 12px; color: #666; margin-bottom: 10px; }
@@ -150,10 +139,7 @@ const TimetableView = () => {
   const maxPeriods = getSlotsForDay('Monday').length;
 
   const renderClassTable = (classId: string) => {
-    const cls = classes.find(c => c.classId === classId);
-    if (!cls) return null;
     const classEntries = version.entries.filter(e => e.classId === classId);
-
     return (
       <table className="w-full border-collapse min-w-[700px]">
         <thead>
@@ -205,49 +191,63 @@ const TimetableView = () => {
     if (!teacher) return null;
     const teacherEntries = getTeacherTimetable(teacherId);
 
+    // Find free periods for substitution info
     return (
-      <table className="w-full border-collapse min-w-[700px]">
-        <thead>
-          <tr className="bg-primary/5">
-            <th className="text-left p-2.5 text-xs font-semibold text-muted-foreground border-b border-border w-20">Day</th>
-            {getSlotsForDay('Monday').map(slot => (
-              <th key={slot.periodNumber} className="text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border">
-                <div>P{slot.periodNumber}</div>
-                <div className="text-[10px] font-normal">{slot.startTime}–{slot.endTime}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {DAYS.map(day => {
-            const daySlots = getSlotsForDay(day);
-            return (
-              <tr key={day} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                <td className="p-2.5 text-xs font-medium text-foreground">{day.slice(0, 3)}</td>
-                {Array.from({ length: maxPeriods }, (_, i) => i + 1).map(period => {
-                  const slot = daySlots.find(s => s.periodNumber === period);
-                  if (!slot && day === 'Saturday') {
-                    return <td key={period} className="p-1 text-center"><div className="rounded p-1.5 bg-muted/30 text-[10px] text-muted-foreground">—</div></td>;
-                  }
-                  const entry = teacherEntries.find(e => e.day === day && e.period === period);
-                  if (!entry) return <td key={period} className="p-1"><div className="rounded p-1.5 bg-muted/20 text-[10px] text-muted-foreground text-center">Free</div></td>;
-                  const subjectName = getSubjectName(entry.subjectId);
-                  const className = getClassName(entry.classId);
-                  const colorClass = getSubjectColor(subjectName);
-                  return (
-                    <td key={period} className="p-1">
-                      <div className={`rounded-lg border p-1.5 text-center ${colorClass}`}>
-                        <p className="text-[11px] font-semibold leading-tight">{subjectName}</p>
-                        <p className="text-[9px] mt-0.5 opacity-80">{className}</p>
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div>
+        <table className="w-full border-collapse min-w-[700px]">
+          <thead>
+            <tr className="bg-primary/5">
+              <th className="text-left p-2.5 text-xs font-semibold text-muted-foreground border-b border-border w-20">Day</th>
+              {getSlotsForDay('Monday').map(slot => (
+                <th key={slot.periodNumber} className="text-center p-2.5 text-xs font-semibold text-muted-foreground border-b border-border">
+                  <div>P{slot.periodNumber}</div>
+                  <div className="text-[10px] font-normal">{slot.startTime}–{slot.endTime}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DAYS.map(day => {
+              const daySlots = getSlotsForDay(day);
+              return (
+                <tr key={day} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="p-2.5 text-xs font-medium text-foreground">{day.slice(0, 3)}</td>
+                  {Array.from({ length: maxPeriods }, (_, i) => i + 1).map(period => {
+                    const slot = daySlots.find(s => s.periodNumber === period);
+                    if (!slot && day === 'Saturday') {
+                      return <td key={period} className="p-1 text-center"><div className="rounded p-1.5 bg-muted/30 text-[10px] text-muted-foreground">—</div></td>;
+                    }
+                    const entry = teacherEntries.find(e => e.day === day && e.period === period);
+                    if (!entry) return (
+                      <td key={period} className="p-1">
+                        <div className="rounded p-1.5 bg-success/10 text-[10px] text-success text-center border border-success/20">
+                          Free
+                        </div>
+                      </td>
+                    );
+                    const subjectName = getSubjectName(entry.subjectId);
+                    const className = getClassName(entry.classId);
+                    const colorClass = getSubjectColor(subjectName);
+                    return (
+                      <td key={period} className="p-1">
+                        <div className={`rounded-lg border p-1.5 text-center ${colorClass}`}>
+                          <p className="text-[11px] font-semibold leading-tight">{subjectName}</p>
+                          <p className="text-[9px] mt-0.5 opacity-80">{className}</p>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {teacher.isAbsent && (
+          <div className="mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
+            <p className="text-xs font-medium text-warning">⚠ This teacher is marked absent. Free teachers can substitute during their free periods.</p>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -256,33 +256,41 @@ const TimetableView = () => {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Timetable</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {school.schoolName} • {school.boardType} • {school.academicYear}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{school.schoolName} • {school.boardType} • {school.academicYear}</p>
         </div>
         <div className="flex items-center gap-2">
           {version.score > 0 && <div className="score-badge">Score: {version.score}%</div>}
-          <Badge variant="outline" className={`text-xs ${
-            version.status === 'locked' ? 'border-success/30 text-success' : 'border-muted-foreground/30'
-          }`}>
+          <Badge variant="outline" className={`text-xs ${version.status === 'locked' ? 'border-success/30 text-success' : 'border-muted-foreground/30'}`}>
             {version.status.charAt(0).toUpperCase() + version.status.slice(1)}
           </Badge>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Button size="sm" className="text-xs gap-1.5" onClick={handleGenerate}>
-          <Sparkles className="h-3.5 w-3.5" /> Generate All Timetables
-        </Button>
-        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleLock} disabled={version.entries.length === 0}>
-          {version.status === 'locked' ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-          {version.status === 'locked' ? 'Unlock' : 'Lock & Publish'}
-        </Button>
-        <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handlePrint} disabled={version.entries.length === 0}>
-          <Printer className="h-3.5 w-3.5" /> Print
-        </Button>
-      </div>
+      <Card className="glass-card">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-muted-foreground mr-2">Generate:</span>
+            <Button size="sm" className="text-xs gap-1.5" onClick={() => handleGenerate([1, 4])}>
+              <Sparkles className="h-3.5 w-3.5" /> Grade 1-4
+            </Button>
+            <Button size="sm" className="text-xs gap-1.5" onClick={() => handleGenerate([5, 10])}>
+              <Sparkles className="h-3.5 w-3.5" /> Grade 5-10
+            </Button>
+            <Button size="sm" variant="secondary" className="text-xs gap-1.5" onClick={() => handleGenerate()}>
+              <Sparkles className="h-3.5 w-3.5" /> All Grades
+            </Button>
+            <div className="border-l border-border h-6 mx-1" />
+            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleLock} disabled={version.entries.length === 0}>
+              {version.status === 'locked' ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+              {version.status === 'locked' ? 'Unlock' : 'Lock'}
+            </Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handlePrint} disabled={version.entries.length === 0}>
+              <Printer className="h-3.5 w-3.5" /> Print
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Errors */}
       {generationErrors.length > 0 && (
@@ -309,8 +317,11 @@ const TimetableView = () => {
           <CardContent className="p-8 text-center">
             <Sparkles className="h-12 w-12 text-accent mx-auto mb-3" />
             <h3 className="font-semibold text-foreground">No Timetable Generated Yet</h3>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">Configure time slots, add teachers and subjects, then generate</p>
-            <Button onClick={handleGenerate}><Sparkles className="h-4 w-4 mr-2" /> Generate Now</Button>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">Configure time slots, add teachers and subjects, then generate by grade group</p>
+            <div className="flex justify-center gap-2">
+              <Button onClick={() => handleGenerate([1, 4])}><Sparkles className="h-4 w-4 mr-2" /> Grade 1-4</Button>
+              <Button onClick={() => handleGenerate([5, 10])}><Sparkles className="h-4 w-4 mr-2" /> Grade 5-10</Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -326,7 +337,7 @@ const TimetableView = () => {
               <Select value={selectedClass} onValueChange={setSelectedClass}>
                 <SelectTrigger className="w-44 h-9 text-sm"><SelectValue placeholder="Select class" /></SelectTrigger>
                 <SelectContent>
-                  {classes.map(c => (
+                  {enabledClasses.map(c => (
                     <SelectItem key={c.classId} value={c.classId}>Class {c.grade}-{c.section}</SelectItem>
                   ))}
                 </SelectContent>
@@ -348,7 +359,7 @@ const TimetableView = () => {
                 <SelectTrigger className="w-52 h-9 text-sm"><SelectValue placeholder="Select teacher" /></SelectTrigger>
                 <SelectContent>
                   {teachers.map(t => (
-                    <SelectItem key={t.teacherId} value={t.teacherId}>{t.name}</SelectItem>
+                    <SelectItem key={t.teacherId} value={t.teacherId}>{t.name} {t.isAbsent ? '(Absent)' : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -363,19 +374,19 @@ const TimetableView = () => {
                 </CardContent>
               </Card>
             ) : (
-              <p className="text-sm text-muted-foreground">Select a teacher to view their schedule</p>
+              <p className="text-sm text-muted-foreground">Select a teacher to view schedule. Free periods (green) show when they can substitute.</p>
             )}
           </TabsContent>
 
           <TabsContent value="school" className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">All classes timetable overview</p>
+              <p className="text-sm text-muted-foreground">All enabled classes timetable</p>
               <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleExportWholeSchool}>
                 <Download className="h-3.5 w-3.5" /> Export Whole School CSV
               </Button>
             </div>
             <div className="space-y-6">
-              {classes.filter(c => version.entries.some(e => e.classId === c.classId)).sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section)).map(cls => (
+              {enabledClasses.filter(c => version.entries.some(e => e.classId === c.classId)).sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section)).map(cls => (
                 <Card key={cls.classId} className="glass-card overflow-hidden">
                   <CardHeader className="pb-2 bg-primary/5">
                     <CardTitle className="text-sm font-semibold">Class {cls.grade}-{cls.section}</CardTitle>
@@ -390,7 +401,6 @@ const TimetableView = () => {
         </Tabs>
       )}
 
-      {/* Generation timestamp */}
       {version.entries.length > 0 && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <CheckCircle className="h-3.5 w-3.5 text-success" />
