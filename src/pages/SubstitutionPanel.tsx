@@ -3,10 +3,23 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, UserCheck, ChevronRight, Sparkles } from 'lucide-react';
-import { mockTeachers, mockSubstitutionSuggestions } from '@/data/mockData';
+import { useSchoolData } from '@/context/SchoolDataContext';
+import { mockSubstitutionSuggestions } from '@/data/mockData';
+import { toast } from 'sonner';
 
 const SubstitutionPanel = () => {
-  const absentTeachers = mockTeachers.filter(t => t.isAbsent);
+  const { teachers, assignSubstitute, timetableVersion } = useSchoolData();
+  const absentTeachers = teachers.filter(t => t.isAbsent);
+
+  const handleAssign = (absentTeacherId: string, substituteId: string, substituteName: string) => {
+    // Find a period where the absent teacher is teaching today
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }) as any;
+    const entry = timetableVersion.entries.find(e => e.teacherId === absentTeacherId && e.day === today);
+    if (entry) {
+      assignSubstitute(absentTeacherId, substituteId, entry.day, entry.period);
+    }
+    toast.success(`${substituteName} assigned as substitute`, { description: 'Timetable updated with substitution' });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -45,7 +58,6 @@ const SubstitutionPanel = () => {
                 <div
                   key={suggestion.teacherId}
                   className="flex items-center gap-4 p-3 rounded-lg border border-border hover:border-primary/20 transition-all group"
-                  style={{ animationDelay: `${i * 100}ms` }}
                 >
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
                     #{i + 1}
@@ -62,7 +74,12 @@ const SubstitutionPanel = () => {
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-0.5">Load: {suggestion.currentLoad} periods</p>
                   </div>
-                  <Button variant="outline" size="sm" className="text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => handleAssign(teacher.teacherId, suggestion.teacherId, suggestion.teacherName)}
+                  >
                     Assign <ChevronRight className="h-3 w-3 ml-1" />
                   </Button>
                 </div>
