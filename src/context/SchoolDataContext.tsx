@@ -9,6 +9,7 @@ import {
   mockTimetableVersion,
   DAYS,
   WEEKDAYS,
+  AVAILABLE_SUBJECTS,
   defaultDivisionsPerGrade,
   generateClasses,
   generateSubjectsForClasses,
@@ -121,10 +122,27 @@ function generateWholeSchoolTimetable(
   const isLabFree = (day: string, period: number): boolean => !labSchedule[day]?.has(period);
   const isPlaygroundFree = (day: string, period: number): boolean => !playgroundSchedule[day]?.has(period);
 
+  // Build a locked teacher map: for each subject-class, pick ONE primary teacher and stick with it
+  const lockedTeacherMap: Record<string, string> = {}; // subjectId -> teacherId
+
   // Process each class
   for (const cls of activeClasses) {
     const classSubjects = subjects.filter(s => s.classId === cls.classId);
     if (classSubjects.length === 0) continue;
+
+    // Pre-assign a locked teacher per subject for this class
+    for (const subj of classSubjects) {
+      if (subj.qualifiedTeacherIds.length > 0) {
+        // Pick the teacher with lowest current weekly load
+        const bestTeacher = subj.qualifiedTeacherIds
+          .map(tid => teachers.find(t => t.teacherId === tid))
+          .filter((t): t is Teacher => !!t && !t.isAbsent)
+          .sort((a, b) => (teacherWeeklyLoad[a.teacherId] || 0) - (teacherWeeklyLoad[b.teacherId] || 0))[0];
+        if (bestTeacher) {
+          lockedTeacherMap[subj.subjectId] = bestTeacher.teacherId;
+        }
+      }
+    }
 
     const priorityOrder = { 'Core': 0, 'Elective': 1, 'Activity': 2 };
     const subjectSlots = classSubjects.map(s => ({ subject: s, assigned: 0 }));
@@ -175,7 +193,7 @@ function generateWholeSchoolTimetable(
       }
     }
 
-    // Fill remaining periods - primary pass (respect periodsPerWeek)
+    // Fill remaining periods
     const fillPeriods = (allowOverfill: boolean) => {
       for (const { day, periods } of allDays) {
         for (const period of periods) {
@@ -205,15 +223,30 @@ function generateWholeSchoolTimetable(
             if (sSlot.subject.isLab && !isLabFree(day, period)) continue;
             if (sSlot.subject.needsPlayground && !isPlaygroundFree(day, period)) continue;
 
-            const qualifiedTeachers = sSlot.subject.qualifiedTeacherIds
-              .map(tid => teachers.find(t => t.teacherId === tid))
-              .filter((t): t is Teacher => !!t && canAssignTeacher(t, day, period));
+            // Use locked teacher first, then fallback to any qualified teacher
+            const lockedTid = lockedTeacherMap[sSlot.subject.subjectId];
+            let teacher: Teacher | undefined;
 
-            if (qualifiedTeachers.length === 0) continue;
+            if (lockedTid) {
+              const lockedT = teachers.find(t => t.teacherId === lockedTid);
+              if (lockedT && canAssignTeacher(lockedT, day, period)) {
+                teacher = lockedT;
+              }
+            }
 
-            const teacher = qualifiedTeachers.sort((a, b) =>
-              (teacherWeeklyLoad[a.teacherId] || 0) - (teacherWeeklyLoad[b.teacherId] || 0)
-            )[0];
+            if (!teacher) {
+              // Fallback: try other qualified teachers
+              const qualifiedTeachers = sSlot.subject.qualifiedTeacherIds
+                .map(tid => teachers.find(t => t.teacherId === tid))
+                .filter((t): t is Teacher => !!t && canAssignTeacher(t, day, period));
+              if (qualifiedTeachers.length > 0) {
+                teacher = qualifiedTeachers.sort((a, b) =>
+                  (teacherWeeklyLoad[a.teacherId] || 0) - (teacherWeeklyLoad[b.teacherId] || 0)
+                )[0];
+              }
+            }
+
+            if (!teacher) continue;
 
             const slot = (day === 'Saturday' ? saturdaySlots : weekdaySlots).find(s => s.periodNumber === period);
             let room = `Room ${cls.grade}-${cls.section}`;
@@ -251,7 +284,7 @@ function generateWholeSchoolTimetable(
 
     // First pass: respect periodsPerWeek limits
     fillPeriods(false);
-    // Second pass: overfill remaining empty slots to eliminate free periods
+    // Second pass: overfill remaining empty slots
     fillPeriods(true);
 
     for (const sSlot of subjectSlots) {
@@ -350,7 +383,7 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
   const getAllSubjectNames = useCallback((): string[] => {
     const fromSubjects = [...new Set(subjects.map(s => s.subjectName))];
     const fromCustom = school.customSubjects;
-    return [...new Set([...fromSubjects, ...fromCustom])].sort();
+    return [...new Set([...AVAILABLE_SUBJECTS, ...fromSubjects, ...fromCustom])].sort();
   }, [subjects, school.customSubjects]);
 
   const getPeriodsPerWeekForClass = useCallback((classId: string): { total: number; available: number; gap: number } => {
