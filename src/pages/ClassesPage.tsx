@@ -225,12 +225,26 @@ const ClassesPage = () => {
                                 const existing = subjects.filter(s => s.classId === cls.classId).map(s => s.subjectName.toLowerCase());
                                 const newSubs = prevSubjects
                                   .filter(ps => !existing.includes(ps.subjectName.toLowerCase()))
-                                  .map(ps => ({
-                                    ...ps,
-                                    subjectId: `s_${cls.classId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                                    classId: cls.classId,
-                                    qualifiedTeacherIds: [],
-                                  }));
+                                  .map(ps => {
+                                    // Auto-match teachers who teach this subject for this class
+                                    const matchedTeacherIds = teachers
+                                      .filter(t => t.subjectClassMap?.some(m => 
+                                        m.subject.toLowerCase() === ps.subjectName.toLowerCase() && m.classIds.includes(cls.classId)
+                                      ))
+                                      .map(t => t.teacherId);
+                                    return {
+                                      ...ps,
+                                      subjectId: `s_${cls.classId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                                      classId: cls.classId,
+                                      periodsPerWeek: ps.periodsPerWeek,
+                                      maxPerDay: ps.maxPerDay,
+                                      priority: ps.priority,
+                                      isLab: ps.isLab,
+                                      allowDoublePeriod: ps.allowDoublePeriod,
+                                      needsPlayground: ps.needsPlayground,
+                                      qualifiedTeacherIds: matchedTeacherIds,
+                                    };
+                                  });
                                 if (newSubs.length === 0) { toast.info('All subjects already exist'); return; }
                                 setSubjects(prev => [...prev, ...newSubs]);
                                 toast.success(`Copied ${newSubs.length} subjects from ${prevClass.grade}-${prevClass.section}`);
