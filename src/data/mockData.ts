@@ -107,9 +107,31 @@ const subjectColors: Record<string, string> = {
   'Environmental Science': 'bg-success/10 text-success border-success/20',
   'Sanskrit': 'bg-primary/10 text-primary border-primary/20',
   'Music': 'bg-accent/10 text-accent border-accent/20',
+  'Geography': 'bg-info/10 text-info border-info/20',
+  'History': 'bg-warning/10 text-warning border-warning/20',
 };
 
 export const getSubjectColor = (subjectName: string) => subjectColors[subjectName] || 'bg-muted text-muted-foreground border-border';
+
+// Hex colors for print/export
+export const subjectPrintColors: Record<string, { bg: string; text: string; border: string }> = {
+  'Mathematics': { bg: '#e0f2fe', text: '#0369a1', border: '#7dd3fc' },
+  'Science': { bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+  'English': { bg: '#fce7f3', text: '#be185d', border: '#f9a8d4' },
+  'Hindi': { bg: '#fef3c7', text: '#b45309', border: '#fcd34d' },
+  'Marathi': { bg: '#ede9fe', text: '#7c3aed', border: '#c4b5fd' },
+  'Social Science': { bg: '#ede9fe', text: '#7c3aed', border: '#c4b5fd' },
+  'Physical Education': { bg: '#fee2e2', text: '#dc2626', border: '#fca5a5' },
+  'Computer Science': { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' },
+  'Art': { bg: '#fce7f3', text: '#be185d', border: '#f9a8d4' },
+  'Environmental Science': { bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+  'Sanskrit': { bg: '#ede9fe', text: '#7c3aed', border: '#c4b5fd' },
+  'Music': { bg: '#fce7f3', text: '#be185d', border: '#f9a8d4' },
+  'Geography': { bg: '#e0f2fe', text: '#0369a1', border: '#7dd3fc' },
+  'History': { bg: '#fef3c7', text: '#b45309', border: '#fcd34d' },
+};
+
+export const getSubjectPrintColor = (name: string) => subjectPrintColors[name] || { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
 
 export const mockTimetableVersion: TimetableVersion = {
   versionId: 'v0',

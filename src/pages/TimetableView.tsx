@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sparkles, Lock, Unlock, Download, Printer, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useSchoolData } from '@/context/SchoolDataContext';
 import { Day } from '@/types/school';
-import { DAYS, getSubjectColor } from '@/data/mockData';
+import { DAYS, getSubjectColor, getSubjectPrintColor } from '@/data/mockData';
 import { toast } from 'sonner';
 
 const TimetableView = () => {
@@ -64,16 +64,42 @@ const TimetableView = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Grid-format CSV: Day | P1 | P2 | ... (matching the table view)
+  const buildGridCSV = (title: string, getEntry: (day: Day, period: number) => string) => {
+    const now = new Date();
+    const dateStr = now.toLocaleString();
+    const periods = weekdaySlots.filter(s => !s.isBreak);
+    const header = ['Day', ...periods.map(s => `P${s.periodNumber} (${s.startTime}-${s.endTime})`)];
+    const rows: string[][] = [
+      [title],
+      [`${school.boardType} | ${school.academicYear} | Generated: ${new Date(version.generatedAt).toLocaleString()} | Downloaded: ${dateStr}`],
+      [],
+      header,
+    ];
+    DAYS.forEach(day => {
+      const daySlots = (day === 'Saturday' ? saturdaySlots : weekdaySlots).filter(s => !s.isBreak);
+      const row = [day, ...periods.map(s => {
+        const hasPeriod = daySlots.some(ds => ds.periodNumber === s.periodNumber);
+        if (!hasPeriod) return '—';
+        return getEntry(day, s.periodNumber);
+      })];
+      rows.push(row);
+    });
+    return rows;
+  };
+
   const handleExportClass = () => {
     const cls = classes.find(c => c.classId === selectedClass);
     if (!cls) return;
-    const rows = [
-      [`${school.schoolName} - Class ${cls.grade}-${cls.section} Timetable`],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
-      ['Day', 'Period', 'Time', 'Subject', 'Teacher', 'Room'],
-    ];
-    version.entries.filter(e => e.classId === selectedClass).sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.period - b.period)
-      .forEach(e => rows.push([e.day, String(e.period), e.timeSlot, getSubjectName(e.subjectId), getTeacherName(e.teacherId), e.room]));
+    const classEntries = version.entries.filter(e => e.classId === selectedClass);
+    const rows = buildGridCSV(
+      `${school.schoolName} - Class ${cls.grade}-${cls.section} Timetable`,
+      (day, period) => {
+        const entry = classEntries.find(e => e.day === day && e.period === period);
+        if (!entry) return 'Free';
+        return `${getSubjectName(entry.subjectId)} (${getTeacherName(entry.teacherId)})`;
+      }
+    );
     generateCSV(rows, `timetable_class_${cls.grade}-${cls.section}_${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success('Class timetable exported');
   };
@@ -81,33 +107,48 @@ const TimetableView = () => {
   const handleExportTeacher = () => {
     const teacher = teachers.find(t => t.teacherId === selectedTeacher);
     if (!teacher) return;
-    const entries = getTeacherTimetable(selectedTeacher);
-    const rows = [
-      [`${school.schoolName} - ${teacher.name} Teaching Schedule`],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
-      ['Day', 'Period', 'Time', 'Subject', 'Class', 'Room'],
-    ];
-    entries.sort((a, b) => DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.period - b.period)
-      .forEach(e => rows.push([e.day, String(e.period), e.timeSlot, getSubjectName(e.subjectId), getClassName(e.classId), e.room]));
+    const teacherEntries = getTeacherTimetable(selectedTeacher);
+    const rows = buildGridCSV(
+      `${school.schoolName} - ${teacher.name} Teaching Schedule`,
+      (day, period) => {
+        const entry = teacherEntries.find(e => e.day === day && e.period === period);
+        if (!entry) return 'Free';
+        return `${getSubjectName(entry.subjectId)} (${getClassName(entry.classId)})`;
+      }
+    );
     generateCSV(rows, `timetable_teacher_${teacher.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success('Teacher timetable exported');
   };
 
   const handleExportWholeSchool = () => {
-    const rows = [
+    const now = new Date();
+    const periods = weekdaySlots.filter(s => !s.isBreak);
+    const header = ['Day', ...periods.map(s => `P${s.periodNumber} (${s.startTime}-${s.endTime})`)];
+    const rows: string[][] = [
       [`${school.schoolName} - Whole School Timetable`],
-      [`Board: ${school.boardType}`, `Year: ${school.academicYear}`, `Generated: ${new Date(version.generatedAt).toLocaleString()}`],
-      ['Class', 'Day', 'Period', 'Time', 'Subject', 'Teacher', 'Room'],
+      [`${school.boardType} | ${school.academicYear} | Generated: ${new Date(version.generatedAt).toLocaleString()} | Downloaded: ${now.toLocaleString()}`],
     ];
-    version.entries.sort((a, b) => {
-      const ca = classes.findIndex(c => c.classId === a.classId);
-      const cb = classes.findIndex(c => c.classId === b.classId);
-      if (ca !== cb) return ca - cb;
-      if (a.day !== b.day) return DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
-      return a.period - b.period;
-    }).forEach(e =>
-      rows.push([getClassName(e.classId), e.day, String(e.period), e.timeSlot, getSubjectName(e.subjectId), getTeacherName(e.teacherId), e.room])
-    );
+
+    enabledClasses.filter(c => version.entries.some(e => e.classId === c.classId))
+      .sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section))
+      .forEach(cls => {
+        rows.push([]);
+        rows.push([`Class ${cls.grade}-${cls.section}`]);
+        rows.push(header);
+        const classEntries = version.entries.filter(e => e.classId === cls.classId);
+        DAYS.forEach(day => {
+          const daySlots = (day === 'Saturday' ? saturdaySlots : weekdaySlots).filter(s => !s.isBreak);
+          const row = [day, ...periods.map(s => {
+            const hasPeriod = daySlots.some(ds => ds.periodNumber === s.periodNumber);
+            if (!hasPeriod) return '—';
+            const entry = classEntries.find(e => e.day === day && e.period === s.periodNumber);
+            if (!entry) return 'Free';
+            return `${getSubjectName(entry.subjectId)} (${getTeacherName(entry.teacherId)})`;
+          })];
+          rows.push(row);
+        });
+      });
+
     generateCSV(rows, `timetable_whole_school_${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success('Whole school timetable exported');
   };
@@ -115,8 +156,29 @@ const TimetableView = () => {
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
+
+    // Build inline color styles for each subject cell
+    const clonedContent = printContent.cloneNode(true) as HTMLElement;
+
+    // Find all subject cells and apply inline colors based on content
+    const allCells = clonedContent.querySelectorAll('td div');
+    allCells.forEach(div => {
+      const el = div as HTMLElement;
+      const text = el.querySelector('p')?.textContent || el.textContent || '';
+      const subjectName = text.trim();
+      const colors = getSubjectPrintColor(subjectName);
+      if (subjectName && colors && !el.textContent?.includes('Break') && !el.textContent?.includes('Free') && !el.textContent?.includes('—')) {
+        el.style.backgroundColor = colors.bg;
+        el.style.color = colors.text;
+        el.style.border = `1px solid ${colors.border}`;
+        el.style.borderRadius = '6px';
+        el.style.padding = '4px 6px';
+      }
+    });
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+    const now = new Date();
     printWindow.document.write(`
       <html><head><title>${school.schoolName} - Timetable</title>
       <style>
@@ -125,12 +187,19 @@ const TimetableView = () => {
         th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 11px; text-align: center; }
         th { background: #f0f4f8; font-weight: bold; }
         h1 { font-size: 18px; margin-bottom: 4px; }
-        .meta { font-size: 12px; color: #666; margin-bottom: 10px; }
-        @media print { body { padding: 0; } }
+        .meta { font-size: 12px; color: #666; margin-bottom: 4px; }
+        .print-date { font-size: 11px; color: #999; margin-bottom: 12px; }
+        @media print { 
+          body { padding: 0; }
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
       </style></head><body>
       <h1>${school.schoolName}</h1>
       <div class="meta">${school.boardType} • ${school.academicYear} • Generated: ${new Date(version.generatedAt).toLocaleString()}</div>
-      ${printContent.innerHTML}
+      <div class="print-date">Printed on: ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}</div>
+      ${clonedContent.innerHTML}
       </body></html>
     `);
     printWindow.document.close();
