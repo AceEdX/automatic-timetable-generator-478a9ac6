@@ -11,8 +11,10 @@ import {
   ChevronRight,
   BookOpen,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { useSchoolData } from '@/context/SchoolDataContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,6 +34,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { school } = useSchoolData();
+  const { signOut, user } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -77,7 +80,14 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <div className="text-[11px] text-sidebar-foreground/50">
               <p className="font-medium text-sidebar-foreground/70">{school.schoolName}</p>
               <p>{school.boardType} • {school.academicYear}</p>
+              {user && <p className="mt-1 truncate">{user.email}</p>}
             </div>
+            <button
+              onClick={signOut}
+              className="mt-2 flex items-center gap-2 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+            >
+              <LogOut className="h-3 w-3" /> Sign Out
+            </button>
           </div>
         )}
 

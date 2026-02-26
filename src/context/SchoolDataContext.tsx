@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { TimeSlot, TimetableVersion, TimetableEntry, Teacher, Subject, ClassInfo, Day, School } from '@/types/school';
 import {
   mockWeekdaySlots,
@@ -14,6 +14,8 @@ import {
   generateClasses,
   generateSubjectsForClasses,
 } from '@/data/mockData';
+import { useAuth } from '@/hooks/useAuth';
+import { useDataPersistence } from '@/hooks/useDataPersistence';
 
 interface SchoolDataContextType {
   school: School;
@@ -42,6 +44,7 @@ interface SchoolDataContextType {
   syncTeacherToSubjects: (teacher: Teacher) => void;
   getAllSubjectNames: () => string[];
   getPeriodsPerWeekForClass: (classId: string) => { total: number; available: number; gap: number };
+  dataLoading: boolean;
 }
 
 const SchoolDataContext = createContext<SchoolDataContextType | null>(null);
@@ -68,7 +71,6 @@ function generateWholeSchoolTimetable(
   const weekdayPeriods = weekdaySlots.filter(s => !s.isBreak).map(s => s.periodNumber);
   const satPeriods = saturdaySlots.filter(s => !s.isBreak).map(s => s.periodNumber);
 
-  // Filter classes: only enabled, and optionally by grade range
   const activeClasses = classes.filter(c => {
     if (!c.isEnabled) return false;
     if (gradeRange) {
@@ -78,7 +80,6 @@ function generateWholeSchoolTimetable(
     return true;
   });
 
-  // Track teacher assignments: teacherId -> { day -> Set<period> }
   const teacherSchedule: Record<string, Record<string, Set<number>>> = {};
   const teacherDailyLoad: Record<string, Record<string, number>> = {};
   const teacherWeeklyLoad: Record<string, number> = {};
@@ -122,18 +123,14 @@ function generateWholeSchoolTimetable(
   const isLabFree = (day: string, period: number): boolean => !labSchedule[day]?.has(period);
   const isPlaygroundFree = (day: string, period: number): boolean => !playgroundSchedule[day]?.has(period);
 
-  // Build a locked teacher map: for each subject-class, pick ONE primary teacher and stick with it
-  const lockedTeacherMap: Record<string, string> = {}; // subjectId -> teacherId
+  const lockedTeacherMap: Record<string, string> = {};
 
-  // Process each class
   for (const cls of activeClasses) {
     const classSubjects = subjects.filter(s => s.classId === cls.classId);
     if (classSubjects.length === 0) continue;
 
-    // Pre-assign a locked teacher per subject for this class
     for (const subj of classSubjects) {
       if (subj.qualifiedTeacherIds.length > 0) {
-        // Pick the teacher with lowest current weekly load
         const bestTeacher = subj.qualifiedTeacherIds
           .map(tid => teachers.find(t => t.teacherId === tid))
           .filter((t): t is Teacher => !!t && !t.isAbsent)
@@ -155,7 +152,6 @@ function generateWholeSchoolTimetable(
 
     const subjectDailyCount: Record<string, number> = {};
 
-    // Try class teacher for first/last period
     const classTeacher = teachers.find(t => t.teacherId === cls.classTeacherId);
     const classTeacherSubject = classTeacher
       ? classSubjects.find(s => s.qualifiedTeacherIds.includes(classTeacher.teacherId))
@@ -193,7 +189,6 @@ function generateWholeSchoolTimetable(
       }
     }
 
-    // Fill remaining periods
     const fillPeriods = (allowOverfill: boolean) => {
       for (const { day, periods } of allDays) {
         for (const period of periods) {
@@ -223,7 +218,6 @@ function generateWholeSchoolTimetable(
             if (sSlot.subject.isLab && !isLabFree(day, period)) continue;
             if (sSlot.subject.needsPlayground && !isPlaygroundFree(day, period)) continue;
 
-            // Use locked teacher first, then fallback to any qualified teacher
             const lockedTid = lockedTeacherMap[sSlot.subject.subjectId];
             let teacher: Teacher | undefined;
 
@@ -235,7 +229,6 @@ function generateWholeSchoolTimetable(
             }
 
             if (!teacher) {
-              // Fallback: try other qualified teachers
               const qualifiedTeachers = sSlot.subject.qualifiedTeacherIds
                 .map(tid => teachers.find(t => t.teacherId === tid))
                 .filter((t): t is Teacher => !!t && canAssignTeacher(t, day, period));
@@ -282,9 +275,7 @@ function generateWholeSchoolTimetable(
       }
     };
 
-    // First pass: respect periodsPerWeek limits
     fillPeriods(false);
-    // Second pass: overfill remaining empty slots
     fillPeriods(true);
 
     for (const sSlot of subjectSlots) {
@@ -304,6 +295,11 @@ function generateWholeSchoolTimetable(
 }
 
 export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  const { saveSchool, saveTeachers, saveClasses, saveSubjects, saveTimeSlots, saveTimetable, loadAllData } = useDataPersistence(user?.id);
+  const [dataLoading, setDataLoading] = useState(true);
+  const initialLoadDone = useRef(false);
+
   const [school, setSchool] = useState<School>({
     schoolId: 's1',
     schoolName: 'Delhi Public School',
@@ -312,21 +308,91 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
     divisionsPerGrade: { ...defaultDivisionsPerGrade },
     customSubjects: [],
   });
-  const [weekdaySlots, setWeekdaySlots] = useState<TimeSlot[]>(mockWeekdaySlots);
-  const [saturdaySlots, setSaturdaySlots] = useState<TimeSlot[]>(mockSaturdaySlots);
-  const [isSaturdayHalfDay, setIsSaturdayHalfDay] = useState(true);
+  const [weekdaySlots, setWeekdaySlotsState] = useState<TimeSlot[]>(mockWeekdaySlots);
+  const [saturdaySlots, setSaturdaySlotsState] = useState<TimeSlot[]>(mockSaturdaySlots);
+  const [isSaturdayHalfDay, setIsSaturdayHalfDayState] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>(mockTeachers);
   const [subjects, setSubjects] = useState<Subject[]>(mockSubjects);
   const [classes, setClasses] = useState<ClassInfo[]>(mockClasses);
   const [timetableVersion, setTimetableVersion] = useState<TimetableVersion>(mockTimetableVersion);
+
+  // Load data from DB on login
+  useEffect(() => {
+    if (!user?.id || initialLoadDone.current) return;
+    
+    const load = async () => {
+      setDataLoading(true);
+      const data = await loadAllData();
+      if (data) {
+        if (data.school) {
+          setSchool(prev => ({
+            ...prev,
+            schoolName: data.school.school_name,
+            boardType: data.school.board_type as any,
+            academicYear: data.school.academic_year,
+            divisionsPerGrade: data.school.divisions_per_grade || prev.divisionsPerGrade,
+            customSubjects: data.school.custom_subjects || [],
+          }));
+        }
+        if (data.teachers.length > 0) setTeachers(data.teachers);
+        if (data.classes.length > 0) setClasses(data.classes);
+        if (data.subjects.length > 0) setSubjects(data.subjects);
+        if (data.timeSlots) {
+          setWeekdaySlotsState(data.timeSlots.weekday_slots || mockWeekdaySlots);
+          setSaturdaySlotsState(data.timeSlots.saturday_slots || mockSaturdaySlots);
+          setIsSaturdayHalfDayState(data.timeSlots.is_saturday_half_day ?? true);
+        }
+        if (data.timetable) setTimetableVersion(data.timetable);
+      }
+      initialLoadDone.current = true;
+      setDataLoading(false);
+    };
+    load();
+  }, [user?.id, loadAllData]);
+
+  // Auto-save on changes (after initial load)
+  const skipSave = useRef(true);
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    // Skip the first render after load
+    if (skipSave.current) { skipSave.current = false; return; }
+    saveSchool(school);
+  }, [school, saveSchool, user?.id]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    saveTeachers(teachers);
+  }, [teachers, saveTeachers, user?.id]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    saveClasses(classes);
+  }, [classes, saveClasses, user?.id]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    saveSubjects(subjects);
+  }, [subjects, saveSubjects, user?.id]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    saveTimeSlots(weekdaySlots, saturdaySlots, isSaturdayHalfDay);
+  }, [weekdaySlots, saturdaySlots, isSaturdayHalfDay, saveTimeSlots, user?.id]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || !user?.id) return;
+    saveTimetable(timetableVersion);
+  }, [timetableVersion, saveTimetable, user?.id]);
+
+  const setWeekdaySlots = useCallback((slots: TimeSlot[]) => setWeekdaySlotsState(slots), []);
+  const setSaturdaySlots = useCallback((slots: TimeSlot[]) => setSaturdaySlotsState(slots), []);
+  const setIsSaturdayHalfDay = useCallback((val: boolean) => setIsSaturdayHalfDayState(val), []);
 
   const updateDivisions = useCallback((grade: string, sections: string[]) => {
     setSchool(prev => ({
       ...prev,
       divisionsPerGrade: { ...prev.divisionsPerGrade, [grade]: sections },
     }));
-
-    // Add new classes, remove old ones
     setClasses(prev => {
       const otherClasses = prev.filter(c => c.grade !== grade);
       const newClasses = sections.map(section => {
@@ -344,20 +410,14 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
         parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section)
       );
     });
-
-    // Generate subjects for new classes
     setSubjects(prev => {
       const otherSubjects = prev.filter(s => !s.classId.startsWith(`c_${grade}_`) || sections.some(sec => s.classId === `c_${grade}_${sec}`));
       const newClassIds = sections.map(s => `c_${grade}_${s}`);
       const missingClassIds = newClassIds.filter(cid => !prev.some(s => s.classId === cid));
       const newSubjects = generateSubjectsForClasses(
         missingClassIds.map(cid => ({
-          classId: cid,
-          schoolId: 's1',
-          grade,
-          section: cid.split('_')[2],
-          classTeacherId: '',
-          isEnabled: true,
+          classId: cid, schoolId: 's1', grade,
+          section: cid.split('_')[2], classTeacherId: '', isEnabled: true,
         }))
       );
       return [...otherSubjects, ...newSubjects];
@@ -402,7 +462,6 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
     );
 
     if (gradeRange) {
-      // Merge: keep entries from other grades, replace entries for this grade range
       setTimetableVersion(prev => {
         const otherEntries = prev.entries.filter(e => {
           const cls = classes.find(c => c.classId === e.classId);
@@ -410,30 +469,17 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
           const g = parseInt(cls.grade);
           return g < gradeRange[0] || g > gradeRange[1];
         });
-        const newVersion: TimetableVersion = {
-          versionId: `v${Date.now()}`,
-          schoolId: school.schoolId,
-          classId: 'all',
-          generatedAt: new Date().toISOString(),
-          score,
-          status: 'draft',
-          isActive: true,
+        return {
+          versionId: `v${Date.now()}`, schoolId: school.schoolId, classId: 'all',
+          generatedAt: new Date().toISOString(), score, status: 'draft', isActive: true,
           entries: [...otherEntries, ...entries],
         };
-        return newVersion;
       });
     } else {
-      const newVersion: TimetableVersion = {
-        versionId: `v${Date.now()}`,
-        schoolId: school.schoolId,
-        classId: 'all',
-        generatedAt: new Date().toISOString(),
-        score,
-        status: 'draft',
-        isActive: true,
-        entries,
-      };
-      setTimetableVersion(newVersion);
+      setTimetableVersion({
+        versionId: `v${Date.now()}`, schoolId: school.schoolId, classId: 'all',
+        generatedAt: new Date().toISOString(), score, status: 'draft', isActive: true, entries,
+      });
     }
 
     return { version: timetableVersion, errors };
@@ -464,8 +510,7 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
       if (existing) existing.count++;
       else breakdownMap.set(key, {
         className: cls ? `${cls.grade}-${cls.section}` : 'Unknown',
-        subjectName: subj?.subjectName || 'Unknown',
-        count: 1,
+        subjectName: subj?.subjectName || 'Unknown', count: 1,
       });
     });
     return { total: teacherEntries.length, breakdown: Array.from(breakdownMap.values()) };
@@ -480,7 +525,6 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
     const wPeriods = weekdaySlots.filter(s => !s.isBreak);
     if (wPeriods.length === 0) errs.push('No weekday time slots configured');
     if (teachers.length === 0) errs.push('No teachers added');
-
     const targetClasses = classes.filter(c => {
       if (!c.isEnabled) return false;
       if (gradeRange) {
@@ -489,13 +533,9 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
       }
       return true;
     });
-
     for (const cls of targetClasses) {
       const classSubjects = subjects.filter(s => s.classId === cls.classId);
-      if (classSubjects.length === 0) {
-        errs.push(`Class ${cls.grade}-${cls.section} has no subjects`);
-        continue;
-      }
+      if (classSubjects.length === 0) { errs.push(`Class ${cls.grade}-${cls.section} has no subjects`); continue; }
       for (const subj of classSubjects) {
         if (subj.qualifiedTeacherIds.length === 0) {
           errs.push(`${subj.subjectName} in ${cls.grade}-${cls.section} has no teacher`);
@@ -506,8 +546,7 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
   }, [weekdaySlots, teachers, subjects, classes]);
 
   const value = useMemo(() => ({
-    school, setSchool,
-    weekdaySlots, saturdaySlots, isSaturdayHalfDay,
+    school, setSchool, weekdaySlots, saturdaySlots, isSaturdayHalfDay,
     teachers, subjects, classes, timetableVersion,
     setWeekdaySlots, setSaturdaySlots, setIsSaturdayHalfDay,
     setTeachers, setSubjects, setClasses,
@@ -515,8 +554,8 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
     lockTimetable, unlockTimetable,
     getTeacherWeeklyPeriods, getTeacherTimetable,
     validateData, updateDivisions, syncTeacherToSubjects,
-    getAllSubjectNames, getPeriodsPerWeekForClass,
-  }), [school, weekdaySlots, saturdaySlots, isSaturdayHalfDay, teachers, subjects, classes, timetableVersion, regenerateTimetable, assignSubstitute, lockTimetable, unlockTimetable, getTeacherWeeklyPeriods, getTeacherTimetable, validateData, updateDivisions, syncTeacherToSubjects, getAllSubjectNames, getPeriodsPerWeekForClass]);
+    getAllSubjectNames, getPeriodsPerWeekForClass, dataLoading,
+  }), [school, weekdaySlots, saturdaySlots, isSaturdayHalfDay, teachers, subjects, classes, timetableVersion, regenerateTimetable, assignSubstitute, lockTimetable, unlockTimetable, getTeacherWeeklyPeriods, getTeacherTimetable, validateData, updateDivisions, syncTeacherToSubjects, getAllSubjectNames, getPeriodsPerWeekForClass, dataLoading]);
 
   return (
     <SchoolDataContext.Provider value={value}>

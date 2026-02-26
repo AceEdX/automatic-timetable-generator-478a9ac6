@@ -14,7 +14,177 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      classes: {
+        Row: {
+          class_id: string
+          created_at: string
+          data: Json
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          data: Json
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      school_settings: {
+        Row: {
+          academic_year: string
+          board_type: string
+          created_at: string
+          custom_subjects: string[]
+          divisions_per_grade: Json
+          id: string
+          school_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          academic_year?: string
+          board_type?: string
+          created_at?: string
+          custom_subjects?: string[]
+          divisions_per_grade?: Json
+          id?: string
+          school_name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          academic_year?: string
+          board_type?: string
+          created_at?: string
+          custom_subjects?: string[]
+          divisions_per_grade?: Json
+          id?: string
+          school_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subjects: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          subject_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          subject_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      teachers: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          teacher_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          teacher_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          teacher_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      time_slot_config: {
+        Row: {
+          created_at: string
+          id: string
+          is_saturday_half_day: boolean
+          saturday_slots: Json
+          updated_at: string
+          user_id: string
+          weekday_slots: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_saturday_half_day?: boolean
+          saturday_slots?: Json
+          updated_at?: string
+          user_id: string
+          weekday_slots?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_saturday_half_day?: boolean
+          saturday_slots?: Json
+          updated_at?: string
+          user_id?: string
+          weekday_slots?: Json
+        }
+        Relationships: []
+      }
+      timetable_versions: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          version_data: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          version_data: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          version_data?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
