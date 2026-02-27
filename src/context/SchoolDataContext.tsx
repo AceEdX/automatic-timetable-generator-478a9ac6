@@ -318,7 +318,11 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
 
   // Load data from DB on login
   useEffect(() => {
-    if (!user?.id || initialLoadDone.current) return;
+    if (!user?.id) {
+      setDataLoading(false);
+      return;
+    }
+    if (initialLoadDone.current) return;
     
     const load = async () => {
       setDataLoading(true);
