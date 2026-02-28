@@ -14,8 +14,7 @@ import {
   generateClasses,
   generateSubjectsForClasses,
 } from '@/data/mockData';
-import { useAuth } from '@/hooks/useAuth';
-import { useDataPersistence } from '@/hooks/useDataPersistence';
+import { useLocalPersistence } from '@/hooks/useLocalPersistence';
 
 interface SchoolDataContextType {
   school: School;
@@ -296,8 +295,7 @@ function generateWholeSchoolTimetable(
 }
 
 export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
-  const { saveSchool, saveTeachers, saveClasses, saveSubjects, saveTimeSlots, saveTimetable, loadAllData } = useDataPersistence(user?.id);
+  const { saveSchool, saveTeachers, saveClasses, saveSubjects, saveTimeSlots, saveTimetable, loadAllData } = useLocalPersistence();
   const [dataLoading, setDataLoading] = useState(true);
   const initialLoadDone = useRef(false);
 
@@ -317,77 +315,56 @@ export const SchoolDataProvider = ({ children }: { children: React.ReactNode }) 
   const [classes, setClasses] = useState<ClassInfo[]>(mockClasses);
   const [timetableVersion, setTimetableVersion] = useState<TimetableVersion>(mockTimetableVersion);
 
-  // Load data from DB on login
+  // Load data from localStorage on mount
   useEffect(() => {
-    if (!user?.id) {
-      setDataLoading(false);
-      return;
-    }
     if (initialLoadDone.current) return;
-    
-    const load = async () => {
-      setDataLoading(true);
-      const data = await loadAllData();
-      if (data) {
-        if (data.school) {
-          setSchool(prev => ({
-            ...prev,
-            schoolName: data.school.school_name,
-            boardType: data.school.board_type as any,
-            academicYear: data.school.academic_year,
-            divisionsPerGrade: data.school.divisions_per_grade || prev.divisionsPerGrade,
-            customSubjects: data.school.custom_subjects || [],
-          }));
-        }
-        if (data.teachers.length > 0) setTeachers(data.teachers);
-        if (data.classes.length > 0) setClasses(data.classes);
-        if (data.subjects.length > 0) setSubjects(data.subjects);
-        if (data.timeSlots) {
-          setWeekdaySlotsState(data.timeSlots.weekday_slots || mockWeekdaySlots);
-          setSaturdaySlotsState(data.timeSlots.saturday_slots || mockSaturdaySlots);
-          setIsSaturdayHalfDayState(data.timeSlots.is_saturday_half_day ?? true);
-        }
-        if (data.timetable) setTimetableVersion(data.timetable);
-      }
-      initialLoadDone.current = true;
-      setDataLoading(false);
-    };
-    load();
-  }, [user?.id, loadAllData]);
+    const data = loadAllData();
+    if (data.school) setSchool(data.school);
+    if (data.teachers && data.teachers.length > 0) setTeachers(data.teachers);
+    if (data.classes && data.classes.length > 0) setClasses(data.classes);
+    if (data.subjects && data.subjects.length > 0) setSubjects(data.subjects);
+    if (data.timeslots) {
+      setWeekdaySlotsState(data.timeslots.weekdaySlots || mockWeekdaySlots);
+      setSaturdaySlotsState(data.timeslots.saturdaySlots || mockSaturdaySlots);
+      setIsSaturdayHalfDayState(data.timeslots.isSaturdayHalfDay ?? true);
+    }
+    if (data.timetable) setTimetableVersion(data.timetable);
+    initialLoadDone.current = true;
+    setDataLoading(false);
+  }, [loadAllData]);
 
   // Auto-save on changes (after initial load)
   const skipSave = useRef(true);
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
-    // Skip the first render after load
+    if (!initialLoadDone.current) return;
     if (skipSave.current) { skipSave.current = false; return; }
     saveSchool(school);
-  }, [school, saveSchool, user?.id]);
+  }, [school, saveSchool]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
+    if (!initialLoadDone.current) return;
     saveTeachers(teachers);
-  }, [teachers, saveTeachers, user?.id]);
+  }, [teachers, saveTeachers]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
+    if (!initialLoadDone.current) return;
     saveClasses(classes);
-  }, [classes, saveClasses, user?.id]);
+  }, [classes, saveClasses]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
+    if (!initialLoadDone.current) return;
     saveSubjects(subjects);
-  }, [subjects, saveSubjects, user?.id]);
+  }, [subjects, saveSubjects]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
+    if (!initialLoadDone.current) return;
     saveTimeSlots(weekdaySlots, saturdaySlots, isSaturdayHalfDay);
-  }, [weekdaySlots, saturdaySlots, isSaturdayHalfDay, saveTimeSlots, user?.id]);
+  }, [weekdaySlots, saturdaySlots, isSaturdayHalfDay, saveTimeSlots]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || !user?.id) return;
+    if (!initialLoadDone.current) return;
     saveTimetable(timetableVersion);
-  }, [timetableVersion, saveTimetable, user?.id]);
+  }, [timetableVersion, saveTimetable]);
 
   const setWeekdaySlots = useCallback((slots: TimeSlot[]) => setWeekdaySlotsState(slots), []);
   const setSaturdaySlots = useCallback((slots: TimeSlot[]) => setSaturdaySlotsState(slots), []);
