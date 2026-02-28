@@ -276,11 +276,12 @@ function generateWholeSchoolTimetable(
     };
 
     fillPeriods(false);
-    fillPeriods(true);
 
     for (const sSlot of subjectSlots) {
       if (sSlot.assigned < sSlot.subject.periodsPerWeek) {
         errors.push(`${sSlot.subject.subjectName} in ${cls.grade}-${cls.section}: Only ${sSlot.assigned}/${sSlot.subject.periodsPerWeek} periods`);
+      } else if (sSlot.assigned > sSlot.subject.periodsPerWeek) {
+        errors.push(`${sSlot.subject.subjectName} in ${cls.grade}-${cls.section}: Over-assigned ${sSlot.assigned}/${sSlot.subject.periodsPerWeek} periods`);
       }
     }
   }
