@@ -19,7 +19,9 @@ const TimetableView = () => {
   const [selectedTeacher, setSelectedTeacher] = useState('');
   const [viewTab, setViewTab] = useState('class');
   const [generationErrors, setGenerationErrors] = useState<string[]>([]);
-  const printRef = useRef<HTMLDivElement>(null);
+  const classPrintRef = useRef<HTMLDivElement>(null);
+  const teacherPrintRef = useRef<HTMLDivElement>(null);
+  const schoolPrintRef = useRef<HTMLDivElement>(null);
 
   const enabledClasses = classes.filter(c => c.isEnabled);
   const version = timetableVersion;
@@ -120,67 +122,98 @@ const TimetableView = () => {
     toast.success('Teacher timetable exported');
   };
 
+  const applySubjectPrintColors = (root: HTMLElement) => {
+    const allCells = root.querySelectorAll('td div');
+    allCells.forEach(div => {
+      const el = div as HTMLElement;
+      const primaryText = el.querySelector('p')?.textContent?.trim() || '';
+      const fallbackText = (el.textContent || '').trim();
+      const subjectName = primaryText || fallbackText;
+
+      if (!subjectName || subjectName.includes('Break') || subjectName.includes('Free') || subjectName.includes('—')) return;
+
+      const colors = getSubjectPrintColor(subjectName);
+      el.style.backgroundColor = colors.bg;
+      el.style.color = colors.text;
+      el.style.border = `1px solid ${colors.border}`;
+      el.style.borderRadius = '6px';
+      el.style.padding = '4px 6px';
+    });
+  };
+
   const handleExportWholeSchool = () => {
-    const now = new Date();
-    const periods = weekdaySlots.filter(s => !s.isBreak);
-    const header = ['Day', ...periods.map(s => `P${s.periodNumber} (${s.startTime}-${s.endTime})`)];
-    const rows: string[][] = [
-      [`${school.schoolName} - Whole School Timetable`],
-      [`${school.boardType} | ${school.academicYear} | Generated: ${new Date(version.generatedAt).toLocaleString()} | Downloaded: ${now.toLocaleString()}`],
-    ];
+    const content = schoolPrintRef.current;
+    if (!content) {
+      toast.error('Whole school timetable is not ready to export');
+      return;
+    }
 
-    enabledClasses.filter(c => version.entries.some(e => e.classId === c.classId))
-      .sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section))
-      .forEach(cls => {
-        rows.push([]);
-        rows.push([`Class ${cls.grade}-${cls.section}`]);
-        rows.push(header);
-        const classEntries = version.entries.filter(e => e.classId === cls.classId);
-        DAYS.forEach(day => {
-          const daySlots = (day === 'Saturday' ? saturdaySlots : weekdaySlots).filter(s => !s.isBreak);
-          const row = [day, ...periods.map(s => {
-            const hasPeriod = daySlots.some(ds => ds.periodNumber === s.periodNumber);
-            if (!hasPeriod) return '—';
-            const entry = classEntries.find(e => e.day === day && e.period === s.periodNumber);
-            if (!entry) return 'Free';
-            return `${getSubjectName(entry.subjectId)} (${getTeacherName(entry.teacherId)})`;
-          })];
-          rows.push(row);
-        });
-      });
+    const cloned = content.cloneNode(true) as HTMLElement;
+    applySubjectPrintColors(cloned);
 
-    generateCSV(rows, `timetable_whole_school_${new Date().toISOString().slice(0, 10)}.csv`);
-    toast.success('Whole school timetable exported');
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>${school.schoolName} - Whole School Timetable</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 11px; text-align: center; }
+      th { background: #f0f4f8; font-weight: bold; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      .meta { font-size: 12px; color: #666; margin-bottom: 4px; }
+      .export-date { font-size: 11px; color: #999; margin-bottom: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>${school.schoolName} - Whole School Timetable</h1>
+    <div class="meta">${school.boardType} • ${school.academicYear} • Generated: ${new Date(version.generatedAt).toLocaleString()}</div>
+    <div class="export-date">Exported on: ${new Date().toLocaleString()}</div>
+    ${cloned.innerHTML}
+  </body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timetable_whole_school_${new Date().toISOString().slice(0, 10)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Whole school timetable exported in table format with colors');
   };
 
   const handlePrint = () => {
-    const printContent = printRef.current;
-    if (!printContent) return;
+    const printContent = viewTab === 'class'
+      ? classPrintRef.current
+      : viewTab === 'teacher'
+        ? teacherPrintRef.current
+        : schoolPrintRef.current;
 
-    // Build inline color styles for each subject cell
+    if (!printContent) {
+      toast.error('Nothing available to print for the selected tab');
+      return;
+    }
+
     const clonedContent = printContent.cloneNode(true) as HTMLElement;
-
-    // Find all subject cells and apply inline colors based on content
-    const allCells = clonedContent.querySelectorAll('td div');
-    allCells.forEach(div => {
-      const el = div as HTMLElement;
-      const text = el.querySelector('p')?.textContent || el.textContent || '';
-      const subjectName = text.trim();
-      const colors = getSubjectPrintColor(subjectName);
-      if (subjectName && colors && !el.textContent?.includes('Break') && !el.textContent?.includes('Free') && !el.textContent?.includes('—')) {
-        el.style.backgroundColor = colors.bg;
-        el.style.color = colors.text;
-        el.style.border = `1px solid ${colors.border}`;
-        el.style.borderRadius = '6px';
-        el.style.padding = '4px 6px';
-      }
-    });
+    applySubjectPrintColors(clonedContent);
 
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) {
+      toast.error('Popup blocked. Please allow popups to print.');
+      return;
+    }
+
+    const title = viewTab === 'class'
+      ? `${school.schoolName} - Class Timetable`
+      : viewTab === 'teacher'
+        ? `${school.schoolName} - Teacher Timetable`
+        : `${school.schoolName} - Whole School Timetable`;
+
     const now = new Date();
     printWindow.document.write(`
-      <html><head><title>${school.schoolName} - Timetable</title>
+      <html><head><title>${title}</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
         table { border-collapse: collapse; width: 100%; margin-top: 10px; }
@@ -189,7 +222,7 @@ const TimetableView = () => {
         h1 { font-size: 18px; margin-bottom: 4px; }
         .meta { font-size: 12px; color: #666; margin-bottom: 4px; }
         .print-date { font-size: 11px; color: #999; margin-bottom: 12px; }
-        @media print { 
+        @media print {
           body { padding: 0; }
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
@@ -432,7 +465,7 @@ const TimetableView = () => {
               </Button>
             </div>
             <Card className="glass-card overflow-hidden">
-              <CardContent className="p-0" ref={printRef}>
+              <CardContent className="p-0" ref={classPrintRef}>
                 <div className="overflow-x-auto">{renderClassTable(selectedClass)}</div>
               </CardContent>
             </Card>
@@ -453,8 +486,8 @@ const TimetableView = () => {
               </Button>
             </div>
             {selectedTeacher ? (
-              <Card className="glass-card overflow-hidden">
-                <CardContent className="p-0">
+                <Card className="glass-card overflow-hidden">
+                  <CardContent className="p-0" ref={teacherPrintRef}>
                   <div className="overflow-x-auto">{renderTeacherTable(selectedTeacher)}</div>
                 </CardContent>
               </Card>
@@ -467,10 +500,10 @@ const TimetableView = () => {
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">All enabled classes timetable</p>
               <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleExportWholeSchool}>
-                <Download className="h-3.5 w-3.5" /> Export Whole School CSV
+                <Download className="h-3.5 w-3.5" /> Export Whole School (HTML)
               </Button>
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6" ref={schoolPrintRef}>
               {enabledClasses.filter(c => version.entries.some(e => e.classId === c.classId)).sort((a, b) => parseInt(a.grade) - parseInt(b.grade) || a.section.localeCompare(b.section)).map(cls => (
                 <Card key={cls.classId} className="glass-card overflow-hidden">
                   <CardHeader className="pb-2 bg-primary/5">
